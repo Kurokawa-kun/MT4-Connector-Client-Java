@@ -670,7 +670,7 @@ public abstract class Connector
         if (!SendReceiveRequest(funcInfo)) FlagEmergencyStop = true;
         return funcInfo.ReturnValue.GetDataString();
     }
-
+    
     public double MarketInfo(String symbol, int type)
     {
         FuncInfo funcInfo = new FuncInfo();
