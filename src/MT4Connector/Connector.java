@@ -2042,8 +2042,8 @@ public abstract class Connector
             //  シャットダウン中だった場合。特に何もしない
         }
         
-        Pipe.Close();
         PrintDebugMessage("サーバーとの接続を切断します。");
+        Pipe.Close();
         return;
     }
 }
