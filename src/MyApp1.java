@@ -28,8 +28,9 @@ public class MyApp1 extends MT4Connector.Connector
         int t = OrderSend(Symbol(), MT4Runtime.OrderType.OP_BUY, 1.00, Ask, 0, Ask - 100 * Point(), Ask + 250 * Point());   //  成行注文
         if (t == -1)
         {
-            System.out.printf("OrderSendが失敗しました。エラーコードは'%d'.", GetLastError());
+            System.out.printf("OrderSendが失敗しました。エラーコードは'%d'。", GetLastError());
         }
+        System.out.printf("チケット番号は'%d'。\n", t);
         ExpertRemove();   //  プログラムの終了
         return;
     }
