@@ -8,10 +8,10 @@ public class MyApp1 extends MT4Connector.Connector
     @Override
     public int OnInit()
     {
-        System.out.println("10秒間スリープして成行注文を1回発行するだけのプログラムです。");
+        System.out.println("5秒間スリープして成行注文を1回発行するだけのプログラムです。");
         digits = (int)MarketInfo(Symbol(), MarketInfo.DoubleProperty.MODE_DIGITS);
         format = String.format("%%.%df", digits);   
-        EventSetTimer(10);
+        EventSetTimer(5);
         return MT4Runtime.InitializeRetCode.INIT_SUCCEEDED;
     }
     @Override
