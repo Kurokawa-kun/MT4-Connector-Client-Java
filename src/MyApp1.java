@@ -54,7 +54,6 @@ public class MyApp1 extends MT4Connector.Connector
         String PipeName = args[1];
         new MyApp1().ConnectToMT4(PipeName);
         System.out.println("MyApp1(Java版)を終了します。");
-        
         return;
     }
 }
