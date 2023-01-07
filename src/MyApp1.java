@@ -29,6 +29,7 @@ public class MyApp1 extends MT4Connector.Connector
         if (t == -1)
         {
             System.out.printf("OrderSendが失敗しました。エラーコードは'%d'。", GetLastError());
+            return;
         }
         System.out.printf("チケット番号は'%d'。\n", t);
         ExpertRemove();   //  プログラムの終了
