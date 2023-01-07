@@ -1,4 +1,4 @@
-#MT4-Connector-Client-Java
+# MT4-Connector-Client-Java
 ## 説明
 MT4を外部のプログラムからコントロールするための制御基盤です。  
 ここで公開しているのはJavaのクライアント機能です。  
