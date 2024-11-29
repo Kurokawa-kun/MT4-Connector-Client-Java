@@ -5,11 +5,11 @@ import MT4Connector.consts.*;
 
 public class MyApp2 extends MT4Connector.Connector
 {
-    String[] SymbolName;    
-    double[] CurrentAsk;
-    double[] CurrentBid;
-    double[] PreviousAsk;
-    double[] PreviousBid;
+    String[] symbolName;
+    double[] currentAsk;
+    double[] currentBid;
+    double[] previousAsk;
+    double[] previousBid;
     String[] format = null;
     int[] digits;
     
@@ -18,19 +18,19 @@ public class MyApp2 extends MT4Connector.Connector
     {
         System.out.println("終了するにはctrl+cを押してください。");
         int t = SymbolsTotal(false);
-        SymbolName = new String[t];
-        CurrentAsk = new double[t];
-        CurrentBid = new double[t];
-        PreviousAsk = new double[t];
-        PreviousBid = new double[t];
+        symbolName = new String[t];
+        currentAsk = new double[t];
+        currentBid = new double[t];
+        previousAsk = new double[t];
+        previousBid = new double[t];
         format = new String[t];
         digits = new int[t];
         
         for (int p = 0; p < SymbolsTotal(false); p++)
         {
-            SymbolName[p] = SymbolName(p, false);
-            format[p] = String.format("%%.%df", (int)MarketInfo(SymbolName[p], MarketInfo.DoubleProperty.MODE_DIGITS));   
-            digits[p] = (int)MarketInfo(SymbolName[p], MarketInfo.DoubleProperty.MODE_DIGITS);
+            symbolName[p] = SymbolName(p, false);
+            format[p] = String.format("%%.%df", (int)MarketInfo(symbolName[p], MarketInfo.DoubleProperty.MODE_DIGITS));   
+            digits[p] = (int)MarketInfo(symbolName[p], MarketInfo.DoubleProperty.MODE_DIGITS);
         }
         EventSetTimer(3);
         return MT4Runtime.InitializeRetCode.INIT_SUCCEEDED;
@@ -38,20 +38,19 @@ public class MyApp2 extends MT4Connector.Connector
     @Override
     public void OnTick()
     {
-        return;
     }
     @Override
     public void OnTimer()
     {
-        for (int p = 0; p < SymbolName.length; p++)
+        for (int p = 0; p < symbolName.length; p++)
         {
-            CurrentAsk[p] = MarketInfo(SymbolName[p], MarketInfo.DoubleProperty.MODE_ASK);
-            CurrentBid[p] = MarketInfo(SymbolName[p], MarketInfo.DoubleProperty.MODE_BID);
+            currentAsk[p] = MarketInfo(symbolName[p], MarketInfo.DoubleProperty.MODE_ASK);
+            currentBid[p] = MarketInfo(symbolName[p], MarketInfo.DoubleProperty.MODE_BID);
 
             Reset();
-            System.out.printf("%-11s: ", SymbolName[p]);
+            System.out.printf("%-11s: ", symbolName[p]);
 
-            if (CurrentBid[p]==PreviousBid[p])
+            if (currentBid[p]==previousBid[p])
             {
                 CursorForward(10);
             }
@@ -59,13 +58,13 @@ public class MyApp2 extends MT4Connector.Connector
             {
                 SetForegroundColor(Color.RED);
             
-                if (CurrentBid[p]>PreviousBid[p]) SetForegroundColor(Color.RED);
+                if (currentBid[p]>previousBid[p]) SetForegroundColor(Color.RED);
                 else SetForegroundColor(Color.BLUE);
-                System.out.printf("%-9s ", String.format(format[p], CurrentBid[p]));
-                PreviousBid[p] = CurrentBid[p];
+                System.out.printf("%-9s ", String.format(format[p], currentBid[p]));
+                previousBid[p] = currentBid[p];
             }
             
-            if (CurrentAsk[p]==PreviousAsk[p])
+            if (currentAsk[p]==previousAsk[p])
             {
                 CursorForward(10);
             }
@@ -73,21 +72,19 @@ public class MyApp2 extends MT4Connector.Connector
             {
                 SetForegroundColor(Color.RED);
             
-                if (CurrentAsk[p]>PreviousAsk[p]) SetForegroundColor(Color.RED);
+                if (currentAsk[p]>previousAsk[p]) SetForegroundColor(Color.RED);
                 else SetForegroundColor(Color.BLUE);
-                System.out.printf("%-9s ", String.format(format[p], CurrentAsk[p]));
-                PreviousAsk[p] = CurrentAsk[p];
+                System.out.printf("%-9s ", String.format(format[p], currentAsk[p]));
+                previousAsk[p] = currentAsk[p];
             }
             if ((p + 1) % 4 == 0) System.out.println();
         }
         System.out.println();
-        CursorUp((int)(SymbolName.length / 4) + 1);
-        return;
+        CursorUp((int)(symbolName.length / 4) + 1);
     }
     @Override
     public void OnDeinit(final int reason)
     {
-        return;
     }
     public static void main(String[] args)
     {
@@ -103,12 +100,9 @@ public class MyApp2 extends MT4Connector.Connector
         Connector p = new MyApp2();
         p.ConnectToMT4(PipeName);
         System.out.println("MyApp2を終了します。");
-        
-        return;
     }
 
-
-    private static void _PrintEscapeCode()
+    private static void _printEscapeCode()
     {
         if (System.getProperty("os.name").startsWith("Windows"))
         {
@@ -132,49 +126,41 @@ public class MyApp2 extends MT4Connector.Connector
             //  それ以外のOS
             System.out.print((char)0x001B);
         }
-        return;
     }    
     //  文字の色を変えるため
     public static void SetForegroundColor(Color c)
     {
-        _PrintEscapeCode();
+        _printEscapeCode();
         System.out.printf(String.format("[38;2;%d;%d;%dm", c.getRed(), c.getGreen(), c.getBlue()));
-        return;
     }
     public static void SetBackgroundColor(Color c)
     {
-        _PrintEscapeCode();
+        _printEscapeCode();
         System.out.printf(String.format("[48;2;%d;%d;%dm", c.getRed(), c.getGreen(), c.getBlue()));
-        return;
     }    
     public static void CursorUp(int n)
     {
-        _PrintEscapeCode();
+        _printEscapeCode();
         System.out.printf("[%dA", n);
-        return;
     }
     public static void CursorDown(int n)
     {
-        _PrintEscapeCode();
+        _printEscapeCode();
         System.out.printf("[%dB", n);
-        return;
     }
     public static void CursorForward(int n)
     {
-        _PrintEscapeCode();
+        _printEscapeCode();
         System.out.printf("[%dC", n);
-        return;
     }
     public static void CursorBack(int n)
     {
-        _PrintEscapeCode();
+        _printEscapeCode();
         System.out.printf("[%dD", n);
-        return;
     }
     public static void Reset()
     {
-        _PrintEscapeCode();
+        _printEscapeCode();
         System.out.printf("[0m");
-        return;
     }
 }

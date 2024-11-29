@@ -6,39 +6,36 @@ import java.nio.channels.*;
 //  クライアント側
 public class PipeClient
 {
-    FileChannel Pipe;
-    ByteBuffer DataStream;
+    FileChannel pipe;
+    ByteBuffer dataStream;
     
     public PipeClient()
     {
-        DataStream = ByteBuffer.allocate(2 * DataGram.BUFFER_SIZE);            
-        return;
+        dataStream = ByteBuffer.allocate(2 * DataGram.BUFFER_SIZE);            
     }
     public void ConnectToServer(String PipeName) throws FileNotFoundException
     {
         File f = new File("\\\\.\\pipe\\" + PipeName);
-        Pipe = new RandomAccessFile(f, "rw").getChannel();
-        return;
+        pipe = new RandomAccessFile(f, "rw").getChannel();
     }
     public boolean SendMessage(Message msg)
     {
         int p=0;
-        DataStream.clear();
+        dataStream.clear();
         
-        if (msg.GetMessageType() == Message.MSG_NOP) return true;
-      
+        if (msg.getMessageType() == Message.MSG_NOP) return true;
         for (int d=0; d<2; d++)
         {
             for (int b=0; b<DataGram.BUFFER_SIZE; b++)
             {
-                DataStream.array()[p] = (byte)msg.Data[d].Buffer[b];
+                dataStream.array()[p] = (byte)msg.getDataGram()[d].buffer[b];
                 p++;
             }
         }
         
         try
         {
-            if (Pipe.write(DataStream) != Message.NUMBER_OF_DATAGRAMS * DataGram.BUFFER_SIZE) return false;
+            if (pipe.write(dataStream) != Message.NUMBER_OF_DATAGRAMS * DataGram.BUFFER_SIZE) return false;
         }
         catch (IOException e)
         {
@@ -50,23 +47,24 @@ public class PipeClient
     public boolean ReceiveMessage(Message msg)
     {
         int p=0;
-        DataStream.clear();
+        dataStream.clear();
         int bs = 0;
+        
         try
         {
-            bs = Pipe.read(DataStream);
+            bs = pipe.read(dataStream);
         }
         catch (IOException e)
         {
             e.printStackTrace();
-        }                
-        if (bs == 0) return false;
+        }
         
+        if (bs == 0) return false;        
         for (int d=0; d<2; d++)
         {
             for (int b=0; b<DataGram.BUFFER_SIZE; b++)
             {
-                msg.Data[d].Buffer[b] = (char)DataStream.array()[p];
+                msg.getDataGram()[d].buffer[b] = (char)dataStream.array()[p];
                 p++;
             }
         }
@@ -77,12 +75,11 @@ public class PipeClient
     {
         try
         {
-            Pipe.close();
+            pipe.close();
         }
         catch (IOException e)
         {
             e.printStackTrace();
         }
-        return;
     }
 }

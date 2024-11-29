@@ -11,54 +11,52 @@ public class FuncInfo
 {
     public static final int MAX_NUMBER_OF_PARAMETERS = 30;
     public static final int MAX_NUMBER_OF_AUXILIARIES = 5000;
-    public String FuncName;
-    public DataGram[] Parameter = new DataGram[MAX_NUMBER_OF_PARAMETERS];
-    public DataGram ReturnValue;
-    public int ErrorCode;
-    public DataGram[] Auxiliary = new DataGram[MAX_NUMBER_OF_AUXILIARIES];
+    public String funcName;
+    public DataGram[] parameter = new DataGram[MAX_NUMBER_OF_PARAMETERS];
+    public DataGram returnValue;
+    public int errorCode;
+    public DataGram[] auxiliary = new DataGram[MAX_NUMBER_OF_AUXILIARIES];
     
     //  コンストラクタ
     public FuncInfo()
     {
-        Clear();
-        return;
+        clear();
     }
     //  フィールドをクリアする
-    public void Clear()
+    public void clear()
     {
-        FuncName = null;
+        funcName = null;
         for (int c=0; c<MAX_NUMBER_OF_PARAMETERS; c++)
         {
-            Parameter[c] = new DataGram();
-            Parameter[c].Clear();
+            parameter[c] = new DataGram();
+            parameter[c].clear();
         }
-        ReturnValue = new DataGram();
-        ReturnValue.Clear();
-        ErrorCode = 0;
+        returnValue = new DataGram();
+        returnValue.clear();
+        errorCode = 0;
         for (int c=0; c<MAX_NUMBER_OF_AUXILIARIES; c++)
         {
-            Auxiliary[c] = new DataGram();
-            Auxiliary[c].Clear();
+            auxiliary[c] = new DataGram();
+            auxiliary[c].clear();
         }
-        return;
     }
     //  パラメタの数を取得する
-    public int GetNumberOfParameters()
+    public int getNumberOfParameters()
     {
         int c;
         for (c=0; c<MAX_NUMBER_OF_PARAMETERS; c++)
         {
-            if (Parameter[c].IsEmpty()) break;
+            if (parameter[c].isEmpty()) break;
         }
         return c;
     }
     //  補助情報の数を取得する
-    public int GetNumberOfAuxiliaries()
+    public int getNumberOfAuxiliaries()
     {
         int c;
         for (c=0; c<MAX_NUMBER_OF_AUXILIARIES; c++)
         {
-            if (Auxiliary[c].IsEmpty()) break;
+            if (auxiliary[c].isEmpty()) break;
         }
         return c;
     }

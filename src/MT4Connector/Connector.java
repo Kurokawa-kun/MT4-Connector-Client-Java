@@ -10,13 +10,19 @@ import MT4Connector.namedpipe.*;
 //  MT4コネクタ（クライアント側）
 public abstract class Connector
 {
-    protected PipeClient Pipe;  //  名前付きパイプの実体
-    protected boolean FlagEmergencyStop = false;  //  システムを停止する必要が生じたとき。このフラグが立ったときはサーバー側にクライアント側のOnDeinit呼び出しを依頼する
-        protected HashMap<String/*通貨ペア*/, HashMap<Integer/*時間足*/, ArrayList<Candle>>> TickData = new HashMap<>(50);  //  全シンボル全時間足のローソク足をロードするためのリスト
+    protected PipeClient pipe;  //  名前付きパイプの実体
+    protected boolean flagEmergencyStop = false;  //  システムを停止する必要が生じたとき。このフラグが立ったときはサーバー側にクライアント側のOnDeinit呼び出しを依頼する
+        protected HashMap<String/*通貨ペア*/, HashMap<Integer/*時間足*/, ArrayList<Candle>>> tickData = new HashMap<>(50);  //  全シンボル全時間足のローソク足をロードするためのリスト
     //  ！このTickDataのしくみは改善事項。実行速度が遅すぎて実用的ではない。    
-    public final static int[] TimeFrames = MT4Runtime.TimeFrame.MT4TimeFrames; //  対応している時間足の一覧
-    protected boolean DebugMode = false;    //  デバッグモードの有無、毎回MT4側にデバッグモード指定の有無を確認するのはオーバーヘッドが大きいので自前の変数で持つ
-
+    public final static int[] timeFrames = MT4Runtime.TimeFrame.MT4TimeFrames; //  対応している時間足の一覧
+    protected boolean debugMode = false;    //  デバッグモードの有無、毎回MT4側にデバッグモード指定の有無を確認するのはオーバーヘッドが大きいので自前の変数で持つ
+    
+    //  コンストラクタ
+    public Connector()
+    {
+        pipe = new PipeClient();
+    }
+    
     //  MT4の関数に対応する関数。これは継承先のクラスで実装してもらう
     public abstract int OnInit();
     public abstract void OnTick();
@@ -25,17 +31,15 @@ public abstract class Connector
     //  OnInitが呼ばれる前に内部的に実行される。プラットフォームやサーバに関する情報をやり取りするための関数（将来の機能拡張用）
     public final void OnPreInit(boolean debug)
     {
-        DebugMode = debug;  //  デバッグモードの設定
-        PrintDebugMessage("OnPreInitが呼ばれました。");
-        PrintDebugMessage("OnPreInitを抜けます。");
-        return;
+        debugMode = debug;  //  デバッグモードの設定
+        printDebugMessage("OnPreInitが呼ばれました。");
+        printDebugMessage("OnPreInitを抜けます。");
     }    
     //  内部的に呼び出されるタイマー。他の通貨ペアの情報などを裏方で送受信するため（将来の機能拡張用）
     public final void OnTimerInternal()
     {
-        PrintDebugMessage("OnTimerInternalが呼ばれました。");
-        PrintDebugMessage("OnTimerInternalを抜けます。");
-        return;
+        printDebugMessage("OnTimerInternalが呼ばれました。");
+        printDebugMessage("OnTimerInternalを抜けます。");
     }
     
     //  ----------  MT4のグローバル変数に相当するもの  ----------
@@ -49,10 +53,9 @@ public abstract class Connector
         
     //  ----------  独自に追加した関数  ----------
     //  デバッグモードの場合のみメッセージを出力する
-    protected void PrintDebugMessage(String message)
+    protected void printDebugMessage(String message)
     {
-        if (DebugMode) System.err.println(message);
-        return;
+        if (debugMode) System.err.println(message);
     }
     //  TickDataリストの初期化
     public void InitChartList()
@@ -61,13 +64,12 @@ public abstract class Connector
         for (int l = 0; l < SymbolsTotal(false); l++)
         {
             String cp = SymbolName(l, false);
-            TickData.put(cp, new HashMap<Integer, ArrayList<Candle>>(21));
-            for (int t : TimeFrames)
+            tickData.put(cp, new HashMap<Integer, ArrayList<Candle>>(21));
+            for (int t : timeFrames)
             {
-                TickData.get(cp).put(t, new ArrayList<Candle>(10000));
+                tickData.get(cp).put(t, new ArrayList<Candle>(10000));
             }
         }
-        return;
     }    
     //  MT4からローソク足を読み込んでTickDataリストに追加する
     //  ！今の実装では全シンボル全時間足のローソク足をロードすると30分近くかかるため実用的ではない（改善事項）
@@ -94,113 +96,112 @@ public abstract class Connector
             int r = GetCandlesTime(currencyPair, tf, aTime, i, i + c);                        
             for (int a = 0; a < r; a++)
             {
-                TickData.get(currencyPair).get(tf).add(new Candle(aOpen[a], aHigh[a], aLow[a], aClose[a], aVolume[a], aTime[a]));
+                tickData.get(currencyPair).get(tf).add(new Candle(aOpen[a], aHigh[a], aLow[a], aClose[a], aVolume[a], aTime[a]));
             }
         }
-        return;
     }
     //  MT4MT5側の独自追加関数を呼び出す
     public int GetCandlesOpen(String symbolName, int timeFrame, double[] data, int barFrom, int barTo)
     {
         FuncInfo funcInfo = new FuncInfo();
-        funcInfo.FuncName = "CopyOpen";
-        funcInfo.Parameter[0].SetData(symbolName);
-        funcInfo.Parameter[1].SetData(timeFrame);
-        funcInfo.Parameter[2].SetData(barFrom);
-        funcInfo.Parameter[3].SetData(barTo - barFrom);
-        funcInfo.Parameter[4].SetData(0);
-        if (!SendReceiveRequest(funcInfo)) FlagEmergencyStop = true;
-        for (int i = 0; i < funcInfo.GetNumberOfAuxiliaries(); i++)
+        funcInfo.funcName = "CopyOpen";
+        funcInfo.parameter[0].setData(symbolName);
+        funcInfo.parameter[1].setData(timeFrame);
+        funcInfo.parameter[2].setData(barFrom);
+        funcInfo.parameter[3].setData(barTo - barFrom);
+        funcInfo.parameter[4].setData(0);
+        if (!SendReceiveRequest(funcInfo)) flagEmergencyStop = true;
+        for (int i = 0; i < funcInfo.getNumberOfAuxiliaries(); i++)
         {
-            data[i] = funcInfo.Auxiliary[i].GetDataDouble();
+            data[i] = funcInfo.auxiliary[i].getDataDouble();
         }
-        LastError = funcInfo.ErrorCode;
-        return funcInfo.ReturnValue.GetDataInt();
+        LastError = funcInfo.errorCode;
+        return funcInfo.returnValue.getDataInt();
     }
     public int GetCandlesHigh(String symbolName, int timeFrame, double[] data, int barFrom, int barTo)
     {
         FuncInfo funcInfo = new FuncInfo();
-        funcInfo.FuncName = "CopyHigh";
-        funcInfo.Parameter[0].SetData(symbolName);
-        funcInfo.Parameter[1].SetData(timeFrame);
-        funcInfo.Parameter[2].SetData(barFrom);
-        funcInfo.Parameter[3].SetData(barTo - barFrom);
-        funcInfo.Parameter[4].SetData(0);
-        if (!SendReceiveRequest(funcInfo)) FlagEmergencyStop = true;
-        for (int i = 0; i < funcInfo.GetNumberOfAuxiliaries(); i++)
+        funcInfo.funcName = "CopyHigh";
+        funcInfo.parameter[0].setData(symbolName);
+        funcInfo.parameter[1].setData(timeFrame);
+        funcInfo.parameter[2].setData(barFrom);
+        funcInfo.parameter[3].setData(barTo - barFrom);
+        funcInfo.parameter[4].setData(0);
+        if (!SendReceiveRequest(funcInfo)) flagEmergencyStop = true;
+        for (int i = 0; i < funcInfo.getNumberOfAuxiliaries(); i++)
         {
-            data[i] = funcInfo.Auxiliary[i].GetDataDouble();
+            data[i] = funcInfo.auxiliary[i].getDataDouble();
         }
-        LastError = funcInfo.ErrorCode;
-        return funcInfo.ReturnValue.GetDataInt();
+        LastError = funcInfo.errorCode;
+        return funcInfo.returnValue.getDataInt();
     }
     public int GetCandlesLow(String symbolName, int timeFrame, double[] data, int barFrom, int barTo)
     {
         FuncInfo funcInfo = new FuncInfo();
-        funcInfo.FuncName = "CopyLow";
-        funcInfo.Parameter[0].SetData(symbolName);
-        funcInfo.Parameter[1].SetData(timeFrame);
-        funcInfo.Parameter[2].SetData(barFrom);
-        funcInfo.Parameter[3].SetData(barTo - barFrom);
-        funcInfo.Parameter[4].SetData(0);
-        if (!SendReceiveRequest(funcInfo)) FlagEmergencyStop = true;
-        for (int i = 0; i < funcInfo.GetNumberOfAuxiliaries(); i++)
+        funcInfo.funcName = "CopyLow";
+        funcInfo.parameter[0].setData(symbolName);
+        funcInfo.parameter[1].setData(timeFrame);
+        funcInfo.parameter[2].setData(barFrom);
+        funcInfo.parameter[3].setData(barTo - barFrom);
+        funcInfo.parameter[4].setData(0);
+        if (!SendReceiveRequest(funcInfo)) flagEmergencyStop = true;
+        for (int i = 0; i < funcInfo.getNumberOfAuxiliaries(); i++)
         {
-            data[i] = funcInfo.Auxiliary[i].GetDataDouble();
+            data[i] = funcInfo.auxiliary[i].getDataDouble();
         }
-        LastError = funcInfo.ErrorCode;
-        return funcInfo.ReturnValue.GetDataInt();
+        LastError = funcInfo.errorCode;
+        return funcInfo.returnValue.getDataInt();
     }
     public int GetCandlesClose(String symbolName, int timeFrame, double[] data, int barFrom, int barTo)
     {
         FuncInfo funcInfo = new FuncInfo();
-        funcInfo.FuncName = "CopyClose";
-        funcInfo.Parameter[0].SetData(symbolName);
-        funcInfo.Parameter[1].SetData(timeFrame);
-        funcInfo.Parameter[2].SetData(barFrom);
-        funcInfo.Parameter[3].SetData(barTo - barFrom);
-        funcInfo.Parameter[4].SetData(0);
-        if (!SendReceiveRequest(funcInfo)) FlagEmergencyStop = true;
-        for (int i = 0; i < funcInfo.GetNumberOfAuxiliaries(); i++)
+        funcInfo.funcName = "CopyClose";
+        funcInfo.parameter[0].setData(symbolName);
+        funcInfo.parameter[1].setData(timeFrame);
+        funcInfo.parameter[2].setData(barFrom);
+        funcInfo.parameter[3].setData(barTo - barFrom);
+        funcInfo.parameter[4].setData(0);
+        if (!SendReceiveRequest(funcInfo)) flagEmergencyStop = true;
+        for (int i = 0; i < funcInfo.getNumberOfAuxiliaries(); i++)
         {
-            data[i] = funcInfo.Auxiliary[i].GetDataDouble();
+            data[i] = funcInfo.auxiliary[i].getDataDouble();
         }
-        LastError = funcInfo.ErrorCode;
-        return funcInfo.ReturnValue.GetDataInt();
+        LastError = funcInfo.errorCode;
+        return funcInfo.returnValue.getDataInt();
     }
     public int GetCandlesVolume(String symbolName, int timeFrame, long[] data, int barFrom, int barTo)
     {
         FuncInfo funcInfo = new FuncInfo();
-        funcInfo.FuncName = "CopyTickVolume";
-        funcInfo.Parameter[0].SetData(symbolName);
-        funcInfo.Parameter[1].SetData(timeFrame);
-        funcInfo.Parameter[2].SetData(barFrom);
-        funcInfo.Parameter[3].SetData(barTo - barFrom);
-        funcInfo.Parameter[4].SetData(0);
-        if (!SendReceiveRequest(funcInfo)) FlagEmergencyStop = true;
-        for (int i = 0; i < funcInfo.GetNumberOfAuxiliaries(); i++)
+        funcInfo.funcName = "CopyTickVolume";
+        funcInfo.parameter[0].setData(symbolName);
+        funcInfo.parameter[1].setData(timeFrame);
+        funcInfo.parameter[2].setData(barFrom);
+        funcInfo.parameter[3].setData(barTo - barFrom);
+        funcInfo.parameter[4].setData(0);
+        if (!SendReceiveRequest(funcInfo)) flagEmergencyStop = true;
+        for (int i = 0; i < funcInfo.getNumberOfAuxiliaries(); i++)
         {
-            data[i] = funcInfo.Auxiliary[i].GetDataLong();
+            data[i] = funcInfo.auxiliary[i].getDataLong();
         }
-        LastError = funcInfo.ErrorCode;
-        return funcInfo.ReturnValue.GetDataInt();
+        LastError = funcInfo.errorCode;
+        return funcInfo.returnValue.getDataInt();
     }
     public int GetCandlesTime(String symbolName, int timeFrame, LocalDateTime[] data, int barFrom, int barTo)
     {
         FuncInfo funcInfo = new FuncInfo();
-        funcInfo.FuncName = "CopyTime";
-        funcInfo.Parameter[0].SetData(symbolName);
-        funcInfo.Parameter[1].SetData(timeFrame);
-        funcInfo.Parameter[2].SetData(barFrom);
-        funcInfo.Parameter[3].SetData(barTo - barFrom);
-        funcInfo.Parameter[4].SetData(0);
-        if (!SendReceiveRequest(funcInfo)) FlagEmergencyStop = true;
-        for (int i = 0; i < funcInfo.GetNumberOfAuxiliaries(); i++)
+        funcInfo.funcName = "CopyTime";
+        funcInfo.parameter[0].setData(symbolName);
+        funcInfo.parameter[1].setData(timeFrame);
+        funcInfo.parameter[2].setData(barFrom);
+        funcInfo.parameter[3].setData(barTo - barFrom);
+        funcInfo.parameter[4].setData(0);
+        if (!SendReceiveRequest(funcInfo)) flagEmergencyStop = true;
+        for (int i = 0; i < funcInfo.getNumberOfAuxiliaries(); i++)
         {
-            data[i] = funcInfo.Auxiliary[i].GetDataDateTime();
+            data[i] = funcInfo.auxiliary[i].getDataDateTime();
         }
-        LastError = funcInfo.ErrorCode;
-        return funcInfo.ReturnValue.GetDataInt();
+        LastError = funcInfo.errorCode;
+        return funcInfo.returnValue.getDataInt();
     }
     
     //  MT4独自形式の色情報をJavaのColorクラスに変換する
@@ -243,21 +244,21 @@ public abstract class Connector
     public int GetPlatformVersion()
     {
         FuncInfo funcInfo = new FuncInfo();
-        funcInfo.FuncName = "GetPlatformVersion";
-        if (!SendReceiveRequest(funcInfo)) FlagEmergencyStop = true;
-        LastError = funcInfo.ErrorCode;
-        return funcInfo.ReturnValue.GetDataInt();
+        funcInfo.funcName = "GetPlatformVersion";
+        if (!SendReceiveRequest(funcInfo)) flagEmergencyStop = true;
+        LastError = funcInfo.errorCode;
+        return funcInfo.returnValue.getDataInt();
     }
     
     //  リソース
     public boolean PlaySound(String FileName)
     {
         FuncInfo funcInfo = new FuncInfo();
-        funcInfo.FuncName = "PlaySound";
-        funcInfo.Parameter[0].SetData(FileName);
-        if (!SendReceiveRequest(funcInfo)) FlagEmergencyStop = true;
-        //LastError = funcInfo.ErrorCode;
-        return funcInfo.ReturnValue.GetDataBool();        
+        funcInfo.funcName = "PlaySound";
+        funcInfo.parameter[0].setData(FileName);
+        if (!SendReceiveRequest(funcInfo)) flagEmergencyStop = true;
+        //LastError = funcInfo.errorCode;
+        return funcInfo.returnValue.getDataBool();        
     }
     //  共通関数
     //void Alert(argument...)  //  ！未サポート。使わなさそうだから今は実装しない
@@ -267,556 +268,555 @@ public abstract class Connector
     public int iBars(String CurrencyPair, int TimeFrame)
     {
         FuncInfo funcInfo = new FuncInfo();
-        funcInfo.FuncName = "iBars";
-        funcInfo.Parameter[0].SetData(CurrencyPair);
-        funcInfo.Parameter[1].SetData(TimeFrame);
-        if (!SendReceiveRequest(funcInfo)) FlagEmergencyStop = true;
-        LastError = funcInfo.ErrorCode;
-        return funcInfo.ReturnValue.GetDataInt();
+        funcInfo.funcName = "iBars";
+        funcInfo.parameter[0].setData(CurrencyPair);
+        funcInfo.parameter[1].setData(TimeFrame);
+        if (!SendReceiveRequest(funcInfo)) flagEmergencyStop = true;
+        LastError = funcInfo.errorCode;
+        return funcInfo.returnValue.getDataInt();
     }
     
     public LocalDateTime TimeCurrent()
     {
         FuncInfo funcInfo = new FuncInfo();
-        funcInfo.FuncName = "TimeCurrent";
-        if (!SendReceiveRequest(funcInfo)) FlagEmergencyStop = true;
-        LastError = funcInfo.ErrorCode;
-        return funcInfo.ReturnValue.GetDataDateTime();
+        funcInfo.funcName = "TimeCurrent";
+        if (!SendReceiveRequest(funcInfo)) flagEmergencyStop = true;
+        LastError = funcInfo.errorCode;
+        return funcInfo.returnValue.getDataDateTime();
     }
     public LocalDateTime TimeLocal()
     {
         FuncInfo funcInfo = new FuncInfo();
-        funcInfo.FuncName = "TimeLocal";
-        if (!SendReceiveRequest(funcInfo)) FlagEmergencyStop = true;
-        LastError = funcInfo.ErrorCode;
-        return funcInfo.ReturnValue.GetDataDateTime();
+        funcInfo.funcName = "TimeLocal";
+        if (!SendReceiveRequest(funcInfo)) flagEmergencyStop = true;
+        LastError = funcInfo.errorCode;
+        return funcInfo.returnValue.getDataDateTime();
     }
     public LocalDateTime TimeGMT()
     {
         FuncInfo funcInfo = new FuncInfo();
-        funcInfo.FuncName = "TimeGMT";
-        if (!SendReceiveRequest(funcInfo)) FlagEmergencyStop = true;
-        LastError = funcInfo.ErrorCode;
-        return funcInfo.ReturnValue.GetDataDateTime();
+        funcInfo.funcName = "TimeGMT";
+        if (!SendReceiveRequest(funcInfo)) flagEmergencyStop = true;
+        LastError = funcInfo.errorCode;
+        return funcInfo.returnValue.getDataDateTime();
     }
     public int TimeDaylightSavings()
     {
         FuncInfo funcInfo = new FuncInfo();
-        funcInfo.FuncName = "TimeDaylightSavings";
-        if (!SendReceiveRequest(funcInfo)) FlagEmergencyStop = true;
-        LastError = funcInfo.ErrorCode;
-        return funcInfo.ReturnValue.GetDataInt();
+        funcInfo.funcName = "TimeDaylightSavings";
+        if (!SendReceiveRequest(funcInfo)) flagEmergencyStop = true;
+        LastError = funcInfo.errorCode;
+        return funcInfo.returnValue.getDataInt();
     }
     public double AccountInfoDouble(int property_id)
     {
         FuncInfo funcInfo = new FuncInfo();
-        funcInfo.FuncName = "AccountInfoDouble";
-        funcInfo.Parameter[0].SetData(property_id);
-        if (!SendReceiveRequest(funcInfo)) FlagEmergencyStop = true;
-        LastError = funcInfo.ErrorCode;
-        return funcInfo.ReturnValue.GetDataDouble();
+        funcInfo.funcName = "AccountInfoDouble";
+        funcInfo.parameter[0].setData(property_id);
+        if (!SendReceiveRequest(funcInfo)) flagEmergencyStop = true;
+        LastError = funcInfo.errorCode;
+        return funcInfo.returnValue.getDataDouble();
     }
     public long AccountInfoInteger(int property_id)
     {
         FuncInfo funcInfo = new FuncInfo();
-        funcInfo.FuncName = "AccountInfoInteger";
-        funcInfo.Parameter[0].SetData(property_id);
-        if (!SendReceiveRequest(funcInfo)) FlagEmergencyStop = true;
-        LastError = funcInfo.ErrorCode;
-        return funcInfo.ReturnValue.GetDataLong();
+        funcInfo.funcName = "AccountInfoInteger";
+        funcInfo.parameter[0].setData(property_id);
+        if (!SendReceiveRequest(funcInfo)) flagEmergencyStop = true;
+        LastError = funcInfo.errorCode;
+        return funcInfo.returnValue.getDataLong();
     }
     public String AccountInfoString(int property_id)
     {
         FuncInfo funcInfo = new FuncInfo();
-        funcInfo.FuncName = "AccountInfoString";
-        funcInfo.Parameter[0].SetData(property_id);
-        if (!SendReceiveRequest(funcInfo)) FlagEmergencyStop = true;
-        LastError = funcInfo.ErrorCode;
-        return funcInfo.ReturnValue.GetDataString();
+        funcInfo.funcName = "AccountInfoString";
+        funcInfo.parameter[0].setData(property_id);
+        if (!SendReceiveRequest(funcInfo)) flagEmergencyStop = true;
+        LastError = funcInfo.errorCode;
+        return funcInfo.returnValue.getDataString();
     }
 
     public double AccountBalance()
     {
         FuncInfo funcInfo = new FuncInfo();
-        funcInfo.FuncName = "AccountBalance";
-        if (!SendReceiveRequest(funcInfo)) FlagEmergencyStop = true;
-        LastError = funcInfo.ErrorCode;
-        return funcInfo.ReturnValue.GetDataDouble();
+        funcInfo.funcName = "AccountBalance";
+        if (!SendReceiveRequest(funcInfo)) flagEmergencyStop = true;
+        LastError = funcInfo.errorCode;
+        return funcInfo.returnValue.getDataDouble();
     }
     
     public double AccountCredit()
     {
         FuncInfo funcInfo = new FuncInfo();
-        funcInfo.FuncName = "AccountCredit";
-        if (!SendReceiveRequest(funcInfo)) FlagEmergencyStop = true;
-        LastError = funcInfo.ErrorCode;
-        return funcInfo.ReturnValue.GetDataDouble();
+        funcInfo.funcName = "AccountCredit";
+        if (!SendReceiveRequest(funcInfo)) flagEmergencyStop = true;
+        LastError = funcInfo.errorCode;
+        return funcInfo.returnValue.getDataDouble();
     }
     
     public String AccountCompany()
     {
         FuncInfo funcInfo = new FuncInfo();
-        funcInfo.FuncName = "AccountCompany";
-        if (!SendReceiveRequest(funcInfo)) FlagEmergencyStop = true;
-        LastError = funcInfo.ErrorCode;
-        return funcInfo.ReturnValue.GetDataString();
+        funcInfo.funcName = "AccountCompany";
+        if (!SendReceiveRequest(funcInfo)) flagEmergencyStop = true;
+        LastError = funcInfo.errorCode;
+        return funcInfo.returnValue.getDataString();
     }
     
     public String AccountCurrency()
     {
         FuncInfo funcInfo = new FuncInfo();
-        funcInfo.FuncName = "AccountCurrency";
-        if (!SendReceiveRequest(funcInfo)) FlagEmergencyStop = true;
-        LastError = funcInfo.ErrorCode;
-        return funcInfo.ReturnValue.GetDataString();
+        funcInfo.funcName = "AccountCurrency";
+        if (!SendReceiveRequest(funcInfo)) flagEmergencyStop = true;
+        LastError = funcInfo.errorCode;
+        return funcInfo.returnValue.getDataString();
     }
     public double AccountEquity()
     {
         FuncInfo funcInfo = new FuncInfo();
-        funcInfo.FuncName = "AccountEquity";
-        if (!SendReceiveRequest(funcInfo)) FlagEmergencyStop = true;
-        LastError = funcInfo.ErrorCode;
-        return funcInfo.ReturnValue.GetDataDouble();
+        funcInfo.funcName = "AccountEquity";
+        if (!SendReceiveRequest(funcInfo)) flagEmergencyStop = true;
+        LastError = funcInfo.errorCode;
+        return funcInfo.returnValue.getDataDouble();
     }
 
     public double AccountFreeMargin()
     {
         FuncInfo funcInfo = new FuncInfo();
-        funcInfo.FuncName = "AccountFreeMargin";
-        if (!SendReceiveRequest(funcInfo)) FlagEmergencyStop = true;
-        LastError = funcInfo.ErrorCode;
-        return funcInfo.ReturnValue.GetDataDouble();
+        funcInfo.funcName = "AccountFreeMargin";
+        if (!SendReceiveRequest(funcInfo)) flagEmergencyStop = true;
+        LastError = funcInfo.errorCode;
+        return funcInfo.returnValue.getDataDouble();
     }
     public double AccountFreeMarginCheck(String symbol, int cmd, double volume)
     {
         FuncInfo funcInfo = new FuncInfo();
-        funcInfo.FuncName = "AccountFreeMarginCheck";
-        funcInfo.Parameter[0].SetData(symbol);
-        funcInfo.Parameter[1].SetData(cmd);
-        funcInfo.Parameter[2].SetData(volume);
-        if (!SendReceiveRequest(funcInfo)) FlagEmergencyStop = true;
-        LastError = funcInfo.ErrorCode;
-        return funcInfo.ReturnValue.GetDataDouble();
+        funcInfo.funcName = "AccountFreeMarginCheck";
+        funcInfo.parameter[0].setData(symbol);
+        funcInfo.parameter[1].setData(cmd);
+        funcInfo.parameter[2].setData(volume);
+        if (!SendReceiveRequest(funcInfo)) flagEmergencyStop = true;
+        LastError = funcInfo.errorCode;
+        return funcInfo.returnValue.getDataDouble();
     }
     public double AccountFreeMarginMode()
     {
         FuncInfo funcInfo = new FuncInfo();
-        funcInfo.FuncName = "AccountFreeMarginMode";
-        if (!SendReceiveRequest(funcInfo)) FlagEmergencyStop = true;
-        LastError = funcInfo.ErrorCode;
-        return funcInfo.ReturnValue.GetDataDouble();
+        funcInfo.funcName = "AccountFreeMarginMode";
+        if (!SendReceiveRequest(funcInfo)) flagEmergencyStop = true;
+        LastError = funcInfo.errorCode;
+        return funcInfo.returnValue.getDataDouble();
     }
     public int AccountLeverage()
     {
         FuncInfo funcInfo = new FuncInfo();
-        funcInfo.FuncName = "AccountLeverage";
-        if (!SendReceiveRequest(funcInfo)) FlagEmergencyStop = true;
-        LastError = funcInfo.ErrorCode;
-        return funcInfo.ReturnValue.GetDataInt();
+        funcInfo.funcName = "AccountLeverage";
+        if (!SendReceiveRequest(funcInfo)) flagEmergencyStop = true;
+        LastError = funcInfo.errorCode;
+        return funcInfo.returnValue.getDataInt();
     }
     public double AccountMargin()
     {
         FuncInfo funcInfo = new FuncInfo();
-        funcInfo.FuncName = "AccountMargin";
-        if (!SendReceiveRequest(funcInfo)) FlagEmergencyStop = true;
-        LastError = funcInfo.ErrorCode;
-        return funcInfo.ReturnValue.GetDataDouble();
+        funcInfo.funcName = "AccountMargin";
+        if (!SendReceiveRequest(funcInfo)) flagEmergencyStop = true;
+        LastError = funcInfo.errorCode;
+        return funcInfo.returnValue.getDataDouble();
     }
     public String AccountName()
     {
         FuncInfo funcInfo = new FuncInfo();
-        funcInfo.FuncName = "AccountName";
-        if (!SendReceiveRequest(funcInfo)) FlagEmergencyStop = true;
-        LastError = funcInfo.ErrorCode;
-        return funcInfo.ReturnValue.GetDataString();
+        funcInfo.funcName = "AccountName";
+        if (!SendReceiveRequest(funcInfo)) flagEmergencyStop = true;
+        LastError = funcInfo.errorCode;
+        return funcInfo.returnValue.getDataString();
     }    
     public int AccountNumber()
     {
         FuncInfo funcInfo = new FuncInfo();
-        funcInfo.FuncName = "AccountNumber";
-        if (!SendReceiveRequest(funcInfo)) FlagEmergencyStop = true;
-        LastError = funcInfo.ErrorCode;
-        return funcInfo.ReturnValue.GetDataInt();
+        funcInfo.funcName = "AccountNumber";
+        if (!SendReceiveRequest(funcInfo)) flagEmergencyStop = true;
+        LastError = funcInfo.errorCode;
+        return funcInfo.returnValue.getDataInt();
     }
     public double AccountProfit()
     {
         FuncInfo funcInfo = new FuncInfo();
-        funcInfo.FuncName = "AccountProfit";
-        if (!SendReceiveRequest(funcInfo)) FlagEmergencyStop = true;
-        LastError = funcInfo.ErrorCode;
-        return funcInfo.ReturnValue.GetDataDouble();
+        funcInfo.funcName = "AccountProfit";
+        if (!SendReceiveRequest(funcInfo)) flagEmergencyStop = true;
+        LastError = funcInfo.errorCode;
+        return funcInfo.returnValue.getDataDouble();
     }
     public String AccountServer()
     {
         FuncInfo funcInfo = new FuncInfo();
-        funcInfo.FuncName = "AccountServer";
-        if (!SendReceiveRequest(funcInfo)) FlagEmergencyStop = true;
-        LastError = funcInfo.ErrorCode;
-        return funcInfo.ReturnValue.GetDataString();
+        funcInfo.funcName = "AccountServer";
+        if (!SendReceiveRequest(funcInfo)) flagEmergencyStop = true;
+        LastError = funcInfo.errorCode;
+        return funcInfo.returnValue.getDataString();
     }
     public int AccountStopoutLevel()
     {
         FuncInfo funcInfo = new FuncInfo();
-        funcInfo.FuncName = "AccountStopoutLevel";
-        if (!SendReceiveRequest(funcInfo)) FlagEmergencyStop = true;
-        LastError = funcInfo.ErrorCode;
-        return funcInfo.ReturnValue.GetDataInt();
+        funcInfo.funcName = "AccountStopoutLevel";
+        if (!SendReceiveRequest(funcInfo)) flagEmergencyStop = true;
+        LastError = funcInfo.errorCode;
+        return funcInfo.returnValue.getDataInt();
     }
     public int AccountStopoutMode()
     {
         FuncInfo funcInfo = new FuncInfo();
-        funcInfo.FuncName = "AccountStopoutMode";
-        if (!SendReceiveRequest(funcInfo)) FlagEmergencyStop = true;
-        LastError = funcInfo.ErrorCode;
-        return funcInfo.ReturnValue.GetDataInt();
+        funcInfo.funcName = "AccountStopoutMode";
+        if (!SendReceiveRequest(funcInfo)) flagEmergencyStop = true;
+        LastError = funcInfo.errorCode;
+        return funcInfo.returnValue.getDataInt();
     }
     public boolean IsStopped()
     {
         FuncInfo funcInfo = new FuncInfo();
-        funcInfo.FuncName = "IsStopped";
-        if (!SendReceiveRequest(funcInfo)) FlagEmergencyStop = true;
-        LastError = funcInfo.ErrorCode;
-        return funcInfo.ReturnValue.GetDataBool();
+        funcInfo.funcName = "IsStopped";
+        if (!SendReceiveRequest(funcInfo)) flagEmergencyStop = true;
+        LastError = funcInfo.errorCode;
+        return funcInfo.returnValue.getDataBool();
     }
     public int UninitializeReason()
     {
         FuncInfo funcInfo = new FuncInfo();
-        funcInfo.FuncName = "UninitializeReason";
-        if (!SendReceiveRequest(funcInfo)) FlagEmergencyStop = true;
-        LastError = funcInfo.ErrorCode;
-        return funcInfo.ReturnValue.GetDataInt();
+        funcInfo.funcName = "UninitializeReason";
+        if (!SendReceiveRequest(funcInfo)) flagEmergencyStop = true;
+        LastError = funcInfo.errorCode;
+        return funcInfo.returnValue.getDataInt();
     }
     
     public int TerminalInfoInteger(int property_id)
     {
         FuncInfo funcInfo = new FuncInfo();
-        funcInfo.FuncName = "TerminalInfoInteger";
-        funcInfo.Parameter[0].SetData(property_id);
-        if (!SendReceiveRequest(funcInfo)) FlagEmergencyStop = true;
-        LastError = funcInfo.ErrorCode;
-        return funcInfo.ReturnValue.GetDataInt();
+        funcInfo.funcName = "TerminalInfoInteger";
+        funcInfo.parameter[0].setData(property_id);
+        if (!SendReceiveRequest(funcInfo)) flagEmergencyStop = true;
+        LastError = funcInfo.errorCode;
+        return funcInfo.returnValue.getDataInt();
     }
     public double TerminalInfoDouble(int property_id)
     {
         FuncInfo funcInfo = new FuncInfo();
-        funcInfo.FuncName = "TerminalInfoDouble";
-        funcInfo.Parameter[0].SetData(property_id);
-        if (!SendReceiveRequest(funcInfo)) FlagEmergencyStop = true;
-        LastError = funcInfo.ErrorCode;
-        return funcInfo.ReturnValue.GetDataDouble();
+        funcInfo.funcName = "TerminalInfoDouble";
+        funcInfo.parameter[0].setData(property_id);
+        if (!SendReceiveRequest(funcInfo)) flagEmergencyStop = true;
+        LastError = funcInfo.errorCode;
+        return funcInfo.returnValue.getDataDouble();
     }
     public String TerminalInfoString(int property_id)
     {
         FuncInfo funcInfo = new FuncInfo();
-        funcInfo.FuncName = "TerminalInfoString";
-        funcInfo.Parameter[0].SetData(property_id);
-        if (!SendReceiveRequest(funcInfo)) FlagEmergencyStop = true;
-        LastError = funcInfo.ErrorCode;
-        return funcInfo.ReturnValue.GetDataString();
+        funcInfo.funcName = "TerminalInfoString";
+        funcInfo.parameter[0].setData(property_id);
+        if (!SendReceiveRequest(funcInfo)) flagEmergencyStop = true;
+        LastError = funcInfo.errorCode;
+        return funcInfo.returnValue.getDataString();
     }
     public int MQLInfoInteger(int property_id)
     {
         FuncInfo funcInfo = new FuncInfo();
-        funcInfo.FuncName = "MQLInfoInteger";
-        funcInfo.Parameter[0].SetData(property_id);
-        if (!SendReceiveRequest(funcInfo)) FlagEmergencyStop = true;
-        LastError = funcInfo.ErrorCode;
-        return funcInfo.ReturnValue.GetDataInt();
+        funcInfo.funcName = "MQLInfoInteger";
+        funcInfo.parameter[0].setData(property_id);
+        if (!SendReceiveRequest(funcInfo)) flagEmergencyStop = true;
+        LastError = funcInfo.errorCode;
+        return funcInfo.returnValue.getDataInt();
     }
     public String MQLInfoString(int property_id)
     {
         FuncInfo funcInfo = new FuncInfo();
-        funcInfo.FuncName = "MQLInfoString";
-        funcInfo.Parameter[0].SetData(property_id);
-        if (!SendReceiveRequest(funcInfo)) FlagEmergencyStop = true;
-        LastError = funcInfo.ErrorCode;
-        return funcInfo.ReturnValue.GetDataString();
+        funcInfo.funcName = "MQLInfoString";
+        funcInfo.parameter[0].setData(property_id);
+        if (!SendReceiveRequest(funcInfo)) flagEmergencyStop = true;
+        LastError = funcInfo.errorCode;
+        return funcInfo.returnValue.getDataString();
     }
     public void MQLSetInteger(int property_id, int property_value)
     {
         FuncInfo funcInfo = new FuncInfo();
-        funcInfo.FuncName = "MQLSetInteger";
-        funcInfo.Parameter[0].SetData(property_id);
-        funcInfo.Parameter[1].SetData(property_value);
-        if (!SendReceiveRequest(funcInfo)) FlagEmergencyStop = true;
-        return;
+        funcInfo.funcName = "MQLSetInteger";
+        funcInfo.parameter[0].setData(property_id);
+        funcInfo.parameter[1].setData(property_value);
+        if (!SendReceiveRequest(funcInfo)) flagEmergencyStop = true;
     }
     
     public String Symbol()
     {
         FuncInfo funcInfo = new FuncInfo();
-        funcInfo.FuncName = "Symbol";
-        if (!SendReceiveRequest(funcInfo)) FlagEmergencyStop = true;
-        return funcInfo.ReturnValue.GetDataString();
+        funcInfo.funcName = "Symbol";
+        if (!SendReceiveRequest(funcInfo)) flagEmergencyStop = true;
+        return funcInfo.returnValue.getDataString();
     }
     public int Period()
     {
         FuncInfo funcInfo = new FuncInfo();
-        funcInfo.FuncName = "Period";
-        if (!SendReceiveRequest(funcInfo)) FlagEmergencyStop = true;
-        return funcInfo.ReturnValue.GetDataInt();
+        funcInfo.funcName = "Period";
+        if (!SendReceiveRequest(funcInfo)) flagEmergencyStop = true;
+        return funcInfo.returnValue.getDataInt();
     }
     public int Digits()
     {
         FuncInfo funcInfo = new FuncInfo();
-        funcInfo.FuncName = "Digits";
-        if (!SendReceiveRequest(funcInfo)) FlagEmergencyStop = true;
-        return funcInfo.ReturnValue.GetDataInt();
+        funcInfo.funcName = "Digits";
+        if (!SendReceiveRequest(funcInfo)) flagEmergencyStop = true;
+        return funcInfo.returnValue.getDataInt();
     }
     public double Point()
     {
         FuncInfo funcInfo = new FuncInfo();
-        funcInfo.FuncName = "Point";
-        if (!SendReceiveRequest(funcInfo)) FlagEmergencyStop = true;
-        return funcInfo.ReturnValue.GetDataDouble();
+        funcInfo.funcName = "Point";
+        if (!SendReceiveRequest(funcInfo)) flagEmergencyStop = true;
+        return funcInfo.returnValue.getDataDouble();
     }
     public boolean IsConnected()
     {
         FuncInfo funcInfo = new FuncInfo();
-        funcInfo.FuncName = "IsConnected";
-        if (!SendReceiveRequest(funcInfo)) FlagEmergencyStop = true;
-        return funcInfo.ReturnValue.GetDataBool();
+        funcInfo.funcName = "IsConnected";
+        if (!SendReceiveRequest(funcInfo)) flagEmergencyStop = true;
+        return funcInfo.returnValue.getDataBool();
     }
     public boolean IsDemo()
     {
         FuncInfo funcInfo = new FuncInfo();
-        funcInfo.FuncName = "IsDemo";
-        if (!SendReceiveRequest(funcInfo)) FlagEmergencyStop = true;
-        return funcInfo.ReturnValue.GetDataBool();
+        funcInfo.funcName = "IsDemo";
+        if (!SendReceiveRequest(funcInfo)) flagEmergencyStop = true;
+        return funcInfo.returnValue.getDataBool();
     }
     public boolean IsDllsAllowed()
     {
         FuncInfo funcInfo = new FuncInfo();
-        funcInfo.FuncName = "IsDllsAllowed";
-        if (!SendReceiveRequest(funcInfo)) FlagEmergencyStop = true;
-        return funcInfo.ReturnValue.GetDataBool();
+        funcInfo.funcName = "IsDllsAllowed";
+        if (!SendReceiveRequest(funcInfo)) flagEmergencyStop = true;
+        return funcInfo.returnValue.getDataBool();
     }
     public boolean IsExpertEnabled()
     {
         FuncInfo funcInfo = new FuncInfo();
-        funcInfo.FuncName = "IsExpertEnabled";
-        if (!SendReceiveRequest(funcInfo)) FlagEmergencyStop = true;
-        return funcInfo.ReturnValue.GetDataBool();
+        funcInfo.funcName = "IsExpertEnabled";
+        if (!SendReceiveRequest(funcInfo)) flagEmergencyStop = true;
+        return funcInfo.returnValue.getDataBool();
     }
     
     public boolean IsLibrariesAllowed()
     {
         FuncInfo funcInfo = new FuncInfo();
-        funcInfo.FuncName = "IsLibrariesAllowed";
-        if (!SendReceiveRequest(funcInfo)) FlagEmergencyStop = true;
-        return funcInfo.ReturnValue.GetDataBool();
+        funcInfo.funcName = "IsLibrariesAllowed";
+        if (!SendReceiveRequest(funcInfo)) flagEmergencyStop = true;
+        return funcInfo.returnValue.getDataBool();
     }
 
     public boolean IsOptimization()
     {
         FuncInfo funcInfo = new FuncInfo();
-        funcInfo.FuncName = "IsOptimization";
-        if (!SendReceiveRequest(funcInfo)) FlagEmergencyStop = true;
-        return funcInfo.ReturnValue.GetDataBool();
+        funcInfo.funcName = "IsOptimization";
+        if (!SendReceiveRequest(funcInfo)) flagEmergencyStop = true;
+        return funcInfo.returnValue.getDataBool();
     }
     
     public boolean IsTesting()
     {
         FuncInfo funcInfo = new FuncInfo();
-        funcInfo.FuncName = "IsTesting";
-        if (!SendReceiveRequest(funcInfo)) FlagEmergencyStop = true;
-        return funcInfo.ReturnValue.GetDataBool();
+        funcInfo.funcName = "IsTesting";
+        if (!SendReceiveRequest(funcInfo)) flagEmergencyStop = true;
+        return funcInfo.returnValue.getDataBool();
     }
     
     public boolean IsTradeAllowed()
     {
         FuncInfo funcInfo = new FuncInfo();
-        funcInfo.FuncName = "IsTradeAllowed";
-        if (!SendReceiveRequest(funcInfo)) FlagEmergencyStop = true;
-        return funcInfo.ReturnValue.GetDataBool();
+        funcInfo.funcName = "IsTradeAllowed";
+        if (!SendReceiveRequest(funcInfo)) flagEmergencyStop = true;
+        return funcInfo.returnValue.getDataBool();
     }
     
     public boolean IsTradeContextBusy()
     {
         FuncInfo funcInfo = new FuncInfo();
-        funcInfo.FuncName = "IsTradeContextBusy";
-        if (!SendReceiveRequest(funcInfo)) FlagEmergencyStop = true;
-        return funcInfo.ReturnValue.GetDataBool();
+        funcInfo.funcName = "IsTradeContextBusy";
+        if (!SendReceiveRequest(funcInfo)) flagEmergencyStop = true;
+        return funcInfo.returnValue.getDataBool();
     }
     
     public boolean IsVisualMode()
     {
         FuncInfo funcInfo = new FuncInfo();
-        funcInfo.FuncName = "IsVisualMode";
-        if (!SendReceiveRequest(funcInfo)) FlagEmergencyStop = true;
-        return funcInfo.ReturnValue.GetDataBool();
+        funcInfo.funcName = "IsVisualMode";
+        if (!SendReceiveRequest(funcInfo)) flagEmergencyStop = true;
+        return funcInfo.returnValue.getDataBool();
     }
 
     public String TerminalCompany()
     {
         FuncInfo funcInfo = new FuncInfo();
-        funcInfo.FuncName = "TerminalCompany";
-        if (!SendReceiveRequest(funcInfo)) FlagEmergencyStop = true;
-        return funcInfo.ReturnValue.GetDataString();
+        funcInfo.funcName = "TerminalCompany";
+        if (!SendReceiveRequest(funcInfo)) flagEmergencyStop = true;
+        return funcInfo.returnValue.getDataString();
     }
     
     public String TerminalName()
     {
         FuncInfo funcInfo = new FuncInfo();
-        funcInfo.FuncName = "TerminalName";
-        if (!SendReceiveRequest(funcInfo)) FlagEmergencyStop = true;
-        return funcInfo.ReturnValue.GetDataString();
+        funcInfo.funcName = "TerminalName";
+        if (!SendReceiveRequest(funcInfo)) flagEmergencyStop = true;
+        return funcInfo.returnValue.getDataString();
     }
     
     public String TerminalPath()
     {
         FuncInfo funcInfo = new FuncInfo();
-        funcInfo.FuncName = "TerminalPath";
-        if (!SendReceiveRequest(funcInfo)) FlagEmergencyStop = true;
-        return funcInfo.ReturnValue.GetDataString();
+        funcInfo.funcName = "TerminalPath";
+        if (!SendReceiveRequest(funcInfo)) flagEmergencyStop = true;
+        return funcInfo.returnValue.getDataString();
     }
     
     public double MarketInfo(String symbol, int type)
     {
         FuncInfo funcInfo = new FuncInfo();
-        funcInfo.FuncName = "MarketInfo";
-        funcInfo.Parameter[0].SetData(symbol);
-        funcInfo.Parameter[1].SetData(type);
-        if (!SendReceiveRequest(funcInfo)) FlagEmergencyStop = true;
-        return funcInfo.ReturnValue.GetDataDouble();
+        funcInfo.funcName = "MarketInfo";
+        funcInfo.parameter[0].setData(symbol);
+        funcInfo.parameter[1].setData(type);
+        if (!SendReceiveRequest(funcInfo)) flagEmergencyStop = true;
+        return funcInfo.returnValue.getDataDouble();
     }
     public int SymbolsTotal(boolean selected)
     {
         FuncInfo funcInfo = new FuncInfo();
-        funcInfo.FuncName = "SymbolsTotal";
-        funcInfo.Parameter[0].SetData(selected);
-        if (!SendReceiveRequest(funcInfo)) FlagEmergencyStop = true;
-        LastError = funcInfo.ErrorCode;
-        return funcInfo.ReturnValue.GetDataInt();
+        funcInfo.funcName = "SymbolsTotal";
+        funcInfo.parameter[0].setData(selected);
+        if (!SendReceiveRequest(funcInfo)) flagEmergencyStop = true;
+        LastError = funcInfo.errorCode;
+        return funcInfo.returnValue.getDataInt();
     }
     public String SymbolName(int pos, boolean selected)
     {
         FuncInfo funcInfo = new FuncInfo();
-        funcInfo.FuncName = "SymbolName";
-        funcInfo.Parameter[0].SetData(pos);
-        funcInfo.Parameter[1].SetData(selected);
-        if (!SendReceiveRequest(funcInfo)) FlagEmergencyStop = true;
-        LastError = funcInfo.ErrorCode;
-        return funcInfo.ReturnValue.GetDataString();
+        funcInfo.funcName = "SymbolName";
+        funcInfo.parameter[0].setData(pos);
+        funcInfo.parameter[1].setData(selected);
+        if (!SendReceiveRequest(funcInfo)) flagEmergencyStop = true;
+        LastError = funcInfo.errorCode;
+        return funcInfo.returnValue.getDataString();
     }
     public boolean SymbolSelect(String name, boolean select)
     {
         FuncInfo funcInfo = new FuncInfo();
-        funcInfo.FuncName = "SymbolSelect";
-        funcInfo.Parameter[0].SetData(name);
-        funcInfo.Parameter[1].SetData(select);
-        if (!SendReceiveRequest(funcInfo)) FlagEmergencyStop = true;
-        LastError = funcInfo.ErrorCode;
-        return funcInfo.ReturnValue.GetDataBool();
+        funcInfo.funcName = "SymbolSelect";
+        funcInfo.parameter[0].setData(name);
+        funcInfo.parameter[1].setData(select);
+        if (!SendReceiveRequest(funcInfo)) flagEmergencyStop = true;
+        LastError = funcInfo.errorCode;
+        return funcInfo.returnValue.getDataBool();
     }
     public long SymbolInfoInteger(String name, int prop_id)
     {
         FuncInfo funcInfo = new FuncInfo();
-        funcInfo.FuncName = "SymbolInfoInteger";
-        funcInfo.Parameter[0].SetData(name);
-        funcInfo.Parameter[1].SetData(prop_id);
-        if (!SendReceiveRequest(funcInfo)) FlagEmergencyStop = true;
-        LastError = funcInfo.ErrorCode;
-        return funcInfo.ReturnValue.GetDataLong();
+        funcInfo.funcName = "SymbolInfoInteger";
+        funcInfo.parameter[0].setData(name);
+        funcInfo.parameter[1].setData(prop_id);
+        if (!SendReceiveRequest(funcInfo)) flagEmergencyStop = true;
+        LastError = funcInfo.errorCode;
+        return funcInfo.returnValue.getDataLong();
     }
     public double SymbolInfoDouble(String name, int prop_id)
     {
         FuncInfo funcInfo = new FuncInfo();
-        funcInfo.FuncName = "SymbolInfoDouble";
-        funcInfo.Parameter[0].SetData(name);
-        funcInfo.Parameter[1].SetData(prop_id);
-        if (!SendReceiveRequest(funcInfo)) FlagEmergencyStop = true;
-        LastError = funcInfo.ErrorCode;
-        return funcInfo.ReturnValue.GetDataDouble();
+        funcInfo.funcName = "SymbolInfoDouble";
+        funcInfo.parameter[0].setData(name);
+        funcInfo.parameter[1].setData(prop_id);
+        if (!SendReceiveRequest(funcInfo)) flagEmergencyStop = true;
+        LastError = funcInfo.errorCode;
+        return funcInfo.returnValue.getDataDouble();
     }
     public String SymbolInfoString(String name, int prop_id)
     {
         FuncInfo funcInfo = new FuncInfo();
-        funcInfo.FuncName = "SymbolInfoString";
-        funcInfo.Parameter[0].SetData(name);
-        funcInfo.Parameter[1].SetData(prop_id);
-        if (!SendReceiveRequest(funcInfo)) FlagEmergencyStop = true;
-        LastError = funcInfo.ErrorCode;
-        return funcInfo.ReturnValue.GetDataString();
+        funcInfo.funcName = "SymbolInfoString";
+        funcInfo.parameter[0].setData(name);
+        funcInfo.parameter[1].setData(prop_id);
+        if (!SendReceiveRequest(funcInfo)) flagEmergencyStop = true;
+        LastError = funcInfo.errorCode;
+        return funcInfo.returnValue.getDataString();
     }
     
     public boolean SymbolInfoTick(String symbol, MqlTick mqlTick)
     {
         FuncInfo funcInfo = new FuncInfo();
-        funcInfo.FuncName = "SymbolInfoTick";
+        funcInfo.funcName = "SymbolInfoTick";
         
-        funcInfo.Parameter[0].SetData(symbol);
-        funcInfo.Parameter[1].SetData(mqlTick.ask);
-        funcInfo.Parameter[2].SetData(mqlTick.bid);
-        funcInfo.Parameter[3].SetData(mqlTick.flags);
-        funcInfo.Parameter[4].SetData(mqlTick.last);
-        funcInfo.Parameter[5].SetData(mqlTick.time);
-        funcInfo.Parameter[6].SetData(mqlTick.time_msc);
-        funcInfo.Parameter[7].SetData(mqlTick.volume);
-        funcInfo.Parameter[8].SetData(mqlTick.volume_real);
+        funcInfo.parameter[0].setData(symbol);
+        funcInfo.parameter[1].setData(mqlTick.ask);
+        funcInfo.parameter[2].setData(mqlTick.bid);
+        funcInfo.parameter[3].setData(mqlTick.flags);
+        funcInfo.parameter[4].setData(mqlTick.last);
+        funcInfo.parameter[5].setData(mqlTick.time);
+        funcInfo.parameter[6].setData(mqlTick.time_msc);
+        funcInfo.parameter[7].setData(mqlTick.volume);
+        funcInfo.parameter[8].setData(mqlTick.volume_real);
         
-        if (!SendReceiveRequest(funcInfo)) FlagEmergencyStop = true;
+        if (!SendReceiveRequest(funcInfo)) flagEmergencyStop = true;
         
-        mqlTick.ask = funcInfo.Auxiliary[0].GetDataDouble();
-        mqlTick.bid = funcInfo.Auxiliary[1].GetDataDouble();
-        mqlTick.flags = funcInfo.Auxiliary[2].GetDataInt();
-        mqlTick.last = funcInfo.Auxiliary[3].GetDataDouble();
-        mqlTick.time = funcInfo.Auxiliary[4].GetDataDateTime();
-        mqlTick.time_msc = funcInfo.Auxiliary[5].GetDataLong();
-        mqlTick.volume = funcInfo.Auxiliary[6].GetDataLong();
-        //mqlTick.volume_real = funcInfo.Auxiliary[7].GetDataDouble();
+        mqlTick.ask = funcInfo.auxiliary[0].getDataDouble();
+        mqlTick.bid = funcInfo.auxiliary[1].getDataDouble();
+        mqlTick.flags = funcInfo.auxiliary[2].getDataInt();
+        mqlTick.last = funcInfo.auxiliary[3].getDataDouble();
+        mqlTick.time = funcInfo.auxiliary[4].getDataDateTime();
+        mqlTick.time_msc = funcInfo.auxiliary[5].getDataLong();
+        mqlTick.volume = funcInfo.auxiliary[6].getDataLong();
+        //mqlTick.volume_real = funcInfo.auxiliary[7].getDataDouble();
         
-        LastError = funcInfo.ErrorCode;
-        return funcInfo.ReturnValue.GetDataBool();
+        LastError = funcInfo.errorCode;
+        return funcInfo.returnValue.getDataBool();
     }
     
     public boolean SymbolInfoSessionQuote(String name, int day_of_week, int session_index, LocalDateTime from, LocalDateTime to)
     {
         FuncInfo funcInfo = new FuncInfo();
-        funcInfo.FuncName = "SymbolInfoSessionQuote";
-        funcInfo.Parameter[0].SetData(name);
-        funcInfo.Parameter[1].SetData(day_of_week);
-        funcInfo.Parameter[2].SetData(session_index);
-        funcInfo.Parameter[3].SetData(from);
-        funcInfo.Parameter[4].SetData(to);
-        if (!SendReceiveRequest(funcInfo)) FlagEmergencyStop = true;
-        LastError = funcInfo.ErrorCode;
-        return funcInfo.ReturnValue.GetDataBool();
+        funcInfo.funcName = "SymbolInfoSessionQuote";
+        funcInfo.parameter[0].setData(name);
+        funcInfo.parameter[1].setData(day_of_week);
+        funcInfo.parameter[2].setData(session_index);
+        funcInfo.parameter[3].setData(from);
+        funcInfo.parameter[4].setData(to);
+        if (!SendReceiveRequest(funcInfo)) flagEmergencyStop = true;
+        LastError = funcInfo.errorCode;
+        return funcInfo.returnValue.getDataBool();
     }
     public boolean SymbolInfoSessionTrade(String name, int day_of_week, int session_index, LocalDateTime from, LocalDateTime to)
     {
         FuncInfo funcInfo = new FuncInfo();
-        funcInfo.FuncName = "SymbolInfoSessionTrade";
-        funcInfo.Parameter[0].SetData(name);
-        funcInfo.Parameter[1].SetData(day_of_week);
-        funcInfo.Parameter[2].SetData(session_index);
-        funcInfo.Parameter[3].SetData(from);
-        funcInfo.Parameter[4].SetData(to);
-        if (!SendReceiveRequest(funcInfo)) FlagEmergencyStop = true;
-        LastError = funcInfo.ErrorCode;
-        return funcInfo.ReturnValue.GetDataBool();
+        funcInfo.funcName = "SymbolInfoSessionTrade";
+        funcInfo.parameter[0].setData(name);
+        funcInfo.parameter[1].setData(day_of_week);
+        funcInfo.parameter[2].setData(session_index);
+        funcInfo.parameter[3].setData(from);
+        funcInfo.parameter[4].setData(to);
+        if (!SendReceiveRequest(funcInfo)) flagEmergencyStop = true;
+        LastError = funcInfo.errorCode;
+        return funcInfo.returnValue.getDataBool();
     }
     
     //  時系列・インジケータアクセス
     public long SeriesInfoInteger(String symbol_name, int timeframe, int prop_id)
     {
         FuncInfo funcInfo = new FuncInfo();
-        funcInfo.FuncName = "SeriesInfoInteger";
-        funcInfo.Parameter[0].SetData(symbol_name);
-        funcInfo.Parameter[1].SetData(timeframe);
-        funcInfo.Parameter[2].SetData(prop_id);
-        if (!SendReceiveRequest(funcInfo)) FlagEmergencyStop = true;
-        LastError = funcInfo.ErrorCode;
-        return funcInfo.ReturnValue.GetDataLong();
+        funcInfo.funcName = "SeriesInfoInteger";
+        funcInfo.parameter[0].setData(symbol_name);
+        funcInfo.parameter[1].setData(timeframe);
+        funcInfo.parameter[2].setData(prop_id);
+        if (!SendReceiveRequest(funcInfo)) flagEmergencyStop = true;
+        LastError = funcInfo.errorCode;
+        return funcInfo.returnValue.getDataLong();
     }
     
     public boolean RefreshRates()
     {
         FuncInfo funcInfo = new FuncInfo();
-        funcInfo.FuncName = "RefreshRates";
-        if (!SendReceiveRequest(funcInfo)) FlagEmergencyStop = true;
-        LastError = funcInfo.ErrorCode;
-        return funcInfo.ReturnValue.GetDataBool();
+        funcInfo.funcName = "RefreshRates";
+        if (!SendReceiveRequest(funcInfo)) flagEmergencyStop = true;
+        LastError = funcInfo.errorCode;
+        return funcInfo.returnValue.getDataBool();
     }
     //  算術関数
     //  Java内部の算術関数を使用してください。
@@ -828,309 +828,308 @@ public abstract class Connector
     public int OrdersHistoryTotal()
     {
         FuncInfo funcInfo = new FuncInfo();
-        funcInfo.FuncName = "OrdersHistoryTotal";
-        if (!SendReceiveRequest(funcInfo)) FlagEmergencyStop = true;
-        LastError = funcInfo.ErrorCode;
-        return funcInfo.ReturnValue.GetDataInt();
+        funcInfo.funcName = "OrdersHistoryTotal";
+        if (!SendReceiveRequest(funcInfo)) flagEmergencyStop = true;
+        LastError = funcInfo.errorCode;
+        return funcInfo.returnValue.getDataInt();
     }
     public int OrdersTotal()
     {
         FuncInfo funcInfo = new FuncInfo();
-        funcInfo.FuncName = "OrdersTotal";
-        if (!SendReceiveRequest(funcInfo)) FlagEmergencyStop = true;
-        LastError = funcInfo.ErrorCode;
-        return funcInfo.ReturnValue.GetDataInt();
+        funcInfo.funcName = "OrdersTotal";
+        if (!SendReceiveRequest(funcInfo)) flagEmergencyStop = true;
+        LastError = funcInfo.errorCode;
+        return funcInfo.returnValue.getDataInt();
     }
     
     public boolean OrderSelect(int index, int select, int pool)
     {
         FuncInfo funcInfo = new FuncInfo();
-        funcInfo.FuncName = "OrderSelect";
-        funcInfo.Parameter[0].SetData(index);
-        funcInfo.Parameter[1].SetData(select);
-        funcInfo.Parameter[2].SetData(pool);
-        if (!SendReceiveRequest(funcInfo)) FlagEmergencyStop = true;
-        LastError = funcInfo.ErrorCode;
-        return funcInfo.ReturnValue.GetDataBool();
+        funcInfo.funcName = "OrderSelect";
+        funcInfo.parameter[0].setData(index);
+        funcInfo.parameter[1].setData(select);
+        funcInfo.parameter[2].setData(pool);
+        if (!SendReceiveRequest(funcInfo)) flagEmergencyStop = true;
+        LastError = funcInfo.errorCode;
+        return funcInfo.returnValue.getDataBool();
     }
     public int OrderSend(String symbol, int cmd, double volume, double price, int slippage, double stoploss, double takeprofit)
     {
         FuncInfo funcInfo = new FuncInfo();
-        funcInfo.FuncName = "OrderSend";
-        funcInfo.Parameter[0].SetData(symbol);
-        funcInfo.Parameter[1].SetData(cmd);
-        funcInfo.Parameter[2].SetData(volume);
-        funcInfo.Parameter[3].SetData(price);
-        funcInfo.Parameter[4].SetData(slippage);
-        funcInfo.Parameter[5].SetData(stoploss);
-        funcInfo.Parameter[6].SetData(takeprofit);
-        funcInfo.Parameter[7].SetData("\0");
-        funcInfo.Parameter[8].SetData(0);
-        funcInfo.Parameter[9].SetData((long)0);
-        funcInfo.Parameter[10].SetData(Color.BLACK);
-        if (!SendReceiveRequest(funcInfo)) FlagEmergencyStop = true;
-        LastError = funcInfo.ErrorCode;
-        return funcInfo.ReturnValue.GetDataInt();
+        funcInfo.funcName = "OrderSend";
+        funcInfo.parameter[0].setData(symbol);
+        funcInfo.parameter[1].setData(cmd);
+        funcInfo.parameter[2].setData(volume);
+        funcInfo.parameter[3].setData(price);
+        funcInfo.parameter[4].setData(slippage);
+        funcInfo.parameter[5].setData(stoploss);
+        funcInfo.parameter[6].setData(takeprofit);
+        funcInfo.parameter[7].setData("\0");
+        funcInfo.parameter[8].setData(0);
+        funcInfo.parameter[9].setData((long)0);
+        funcInfo.parameter[10].setData(Color.BLACK);
+        if (!SendReceiveRequest(funcInfo)) flagEmergencyStop = true;
+        LastError = funcInfo.errorCode;
+        return funcInfo.returnValue.getDataInt();
     }
     public int OrderSend(String symbol, int cmd, double volume, double price, int slippage, double stoploss, double takeprofit, String comment)
     {
         FuncInfo funcInfo = new FuncInfo();
-        funcInfo.FuncName = "OrderSend";
-        funcInfo.Parameter[0].SetData(symbol);
-        funcInfo.Parameter[1].SetData(cmd);
-        funcInfo.Parameter[2].SetData(volume);
-        funcInfo.Parameter[3].SetData(price);
-        funcInfo.Parameter[4].SetData(slippage);
-        funcInfo.Parameter[5].SetData(stoploss);
-        funcInfo.Parameter[6].SetData(takeprofit);
-        funcInfo.Parameter[7].SetData(comment);
-        funcInfo.Parameter[8].SetData(0);
-        funcInfo.Parameter[9].SetData((long)0);
-        funcInfo.Parameter[10].SetData(Color.BLACK);
-        if (!SendReceiveRequest(funcInfo)) FlagEmergencyStop = true;
-        LastError = funcInfo.ErrorCode;
-        return funcInfo.ReturnValue.GetDataInt();
+        funcInfo.funcName = "OrderSend";
+        funcInfo.parameter[0].setData(symbol);
+        funcInfo.parameter[1].setData(cmd);
+        funcInfo.parameter[2].setData(volume);
+        funcInfo.parameter[3].setData(price);
+        funcInfo.parameter[4].setData(slippage);
+        funcInfo.parameter[5].setData(stoploss);
+        funcInfo.parameter[6].setData(takeprofit);
+        funcInfo.parameter[7].setData(comment);
+        funcInfo.parameter[8].setData(0);
+        funcInfo.parameter[9].setData((long)0);
+        funcInfo.parameter[10].setData(Color.BLACK);
+        if (!SendReceiveRequest(funcInfo)) flagEmergencyStop = true;
+        LastError = funcInfo.errorCode;
+        return funcInfo.returnValue.getDataInt();
     }
     public int OrderSend(String symbol, int cmd, double volume, double price, int slippage, double stoploss, double takeprofit, String comment, int magic)
     {
         FuncInfo funcInfo = new FuncInfo();
-        funcInfo.FuncName = "OrderSend";
-        funcInfo.Parameter[0].SetData(symbol);
-        funcInfo.Parameter[1].SetData(cmd);
-        funcInfo.Parameter[2].SetData(volume);
-        funcInfo.Parameter[3].SetData(price);
-        funcInfo.Parameter[4].SetData(slippage);
-        funcInfo.Parameter[5].SetData(stoploss);
-        funcInfo.Parameter[6].SetData(takeprofit);
-        funcInfo.Parameter[7].SetData(comment);
-        funcInfo.Parameter[8].SetData(magic);
-        funcInfo.Parameter[9].SetData((long)0);
-        funcInfo.Parameter[10].SetData(Color.BLACK);
-        if (!SendReceiveRequest(funcInfo)) FlagEmergencyStop = true;
-        LastError = funcInfo.ErrorCode;
-        return funcInfo.ReturnValue.GetDataInt();
+        funcInfo.funcName = "OrderSend";
+        funcInfo.parameter[0].setData(symbol);
+        funcInfo.parameter[1].setData(cmd);
+        funcInfo.parameter[2].setData(volume);
+        funcInfo.parameter[3].setData(price);
+        funcInfo.parameter[4].setData(slippage);
+        funcInfo.parameter[5].setData(stoploss);
+        funcInfo.parameter[6].setData(takeprofit);
+        funcInfo.parameter[7].setData(comment);
+        funcInfo.parameter[8].setData(magic);
+        funcInfo.parameter[9].setData((long)0);
+        funcInfo.parameter[10].setData(Color.BLACK);
+        if (!SendReceiveRequest(funcInfo)) flagEmergencyStop = true;
+        LastError = funcInfo.errorCode;
+        return funcInfo.returnValue.getDataInt();
     }
     public int OrderSend(String symbol, int cmd, double volume, double price, int slippage, double stoploss, double takeprofit, String comment, int magic, LocalDateTime expiration)
     {
         FuncInfo funcInfo = new FuncInfo();
-        funcInfo.FuncName = "OrderSend";
-        funcInfo.Parameter[0].SetData(symbol);
-        funcInfo.Parameter[1].SetData(cmd);
-        funcInfo.Parameter[2].SetData(volume);
-        funcInfo.Parameter[3].SetData(price);
-        funcInfo.Parameter[4].SetData(slippage);
-        funcInfo.Parameter[5].SetData(stoploss);
-        funcInfo.Parameter[6].SetData(takeprofit);
-        funcInfo.Parameter[7].SetData(comment);
-        funcInfo.Parameter[8].SetData(magic);
-        funcInfo.Parameter[9].SetData(expiration);
-        funcInfo.Parameter[10].SetData(Color.BLACK);
-        if (!SendReceiveRequest(funcInfo)) FlagEmergencyStop = true;
-        LastError = funcInfo.ErrorCode;
-        return funcInfo.ReturnValue.GetDataInt();
+        funcInfo.funcName = "OrderSend";
+        funcInfo.parameter[0].setData(symbol);
+        funcInfo.parameter[1].setData(cmd);
+        funcInfo.parameter[2].setData(volume);
+        funcInfo.parameter[3].setData(price);
+        funcInfo.parameter[4].setData(slippage);
+        funcInfo.parameter[5].setData(stoploss);
+        funcInfo.parameter[6].setData(takeprofit);
+        funcInfo.parameter[7].setData(comment);
+        funcInfo.parameter[8].setData(magic);
+        funcInfo.parameter[9].setData(expiration);
+        funcInfo.parameter[10].setData(Color.BLACK);
+        if (!SendReceiveRequest(funcInfo)) flagEmergencyStop = true;
+        LastError = funcInfo.errorCode;
+        return funcInfo.returnValue.getDataInt();
     }
     public int OrderSend(String symbol, int cmd, double volume, double price, int slippage, double stoploss, double takeprofit, String comment, int magic, LocalDateTime expiration, Color arrow_color)
     {
         FuncInfo funcInfo = new FuncInfo();
-        funcInfo.FuncName = "OrderSend";
-        funcInfo.Parameter[0].SetData(symbol);
-        funcInfo.Parameter[1].SetData(cmd);
-        funcInfo.Parameter[2].SetData(volume);
-        funcInfo.Parameter[3].SetData(price);
-        funcInfo.Parameter[4].SetData(slippage);
-        funcInfo.Parameter[5].SetData(stoploss);
-        funcInfo.Parameter[6].SetData(takeprofit);
-        funcInfo.Parameter[7].SetData(comment);
-        funcInfo.Parameter[8].SetData(magic);
-        funcInfo.Parameter[9].SetData(expiration);
-        funcInfo.Parameter[10].SetData(arrow_color);
-        if (!SendReceiveRequest(funcInfo)) FlagEmergencyStop = true;
-        LastError = funcInfo.ErrorCode;
-        return funcInfo.ReturnValue.GetDataInt();
+        funcInfo.funcName = "OrderSend";
+        funcInfo.parameter[0].setData(symbol);
+        funcInfo.parameter[1].setData(cmd);
+        funcInfo.parameter[2].setData(volume);
+        funcInfo.parameter[3].setData(price);
+        funcInfo.parameter[4].setData(slippage);
+        funcInfo.parameter[5].setData(stoploss);
+        funcInfo.parameter[6].setData(takeprofit);
+        funcInfo.parameter[7].setData(comment);
+        funcInfo.parameter[8].setData(magic);
+        funcInfo.parameter[9].setData(expiration);
+        funcInfo.parameter[10].setData(arrow_color);
+        if (!SendReceiveRequest(funcInfo)) flagEmergencyStop = true;
+        LastError = funcInfo.errorCode;
+        return funcInfo.returnValue.getDataInt();
     }
     public boolean OrderClose(int ticket, double lots, double price, int slippage, Color arrow_color)
     {
         FuncInfo funcInfo = new FuncInfo();
-        funcInfo.FuncName = "OrderClose";
-        funcInfo.Parameter[0].SetData(ticket);
-        funcInfo.Parameter[1].SetData(lots);
-        funcInfo.Parameter[2].SetData(price);
-        funcInfo.Parameter[3].SetData(slippage);
-        funcInfo.Parameter[4].SetData(arrow_color);
-        if (!SendReceiveRequest(funcInfo)) FlagEmergencyStop = true;
-        LastError = funcInfo.ErrorCode;
-        return funcInfo.ReturnValue.GetDataBool();
+        funcInfo.funcName = "OrderClose";
+        funcInfo.parameter[0].setData(ticket);
+        funcInfo.parameter[1].setData(lots);
+        funcInfo.parameter[2].setData(price);
+        funcInfo.parameter[3].setData(slippage);
+        funcInfo.parameter[4].setData(arrow_color);
+        if (!SendReceiveRequest(funcInfo)) flagEmergencyStop = true;
+        LastError = funcInfo.errorCode;
+        return funcInfo.returnValue.getDataBool();
     }
     public boolean OrderCloseBy(int ticket, int opposite, Color arrow_color)
     {
         FuncInfo funcInfo = new FuncInfo();
-        funcInfo.FuncName = "OrderCloseBy";
-        funcInfo.Parameter[0].SetData(ticket);
-        funcInfo.Parameter[1].SetData(opposite);
-        funcInfo.Parameter[2].SetData(arrow_color);
-        if (!SendReceiveRequest(funcInfo)) FlagEmergencyStop = true;
-        LastError = funcInfo.ErrorCode;
-        return funcInfo.ReturnValue.GetDataBool();
+        funcInfo.funcName = "OrderCloseBy";
+        funcInfo.parameter[0].setData(ticket);
+        funcInfo.parameter[1].setData(opposite);
+        funcInfo.parameter[2].setData(arrow_color);
+        if (!SendReceiveRequest(funcInfo)) flagEmergencyStop = true;
+        LastError = funcInfo.errorCode;
+        return funcInfo.returnValue.getDataBool();
     }
     public boolean OrderModify(int ticket, double price, double stoploss, double takeprofit, LocalDateTime expiration, Color arrow_color)
     {
         FuncInfo funcInfo = new FuncInfo();
-        funcInfo.FuncName = "OrderModify";
-        funcInfo.Parameter[0].SetData(ticket);
-        funcInfo.Parameter[1].SetData(price);
-        funcInfo.Parameter[2].SetData(stoploss);
-        funcInfo.Parameter[3].SetData(takeprofit);
-        funcInfo.Parameter[4].SetData(expiration);
-        funcInfo.Parameter[5].SetData(arrow_color);
-        if (!SendReceiveRequest(funcInfo)) FlagEmergencyStop = true;
-        LastError = funcInfo.ErrorCode;
-        return funcInfo.ReturnValue.GetDataBool();
+        funcInfo.funcName = "OrderModify";
+        funcInfo.parameter[0].setData(ticket);
+        funcInfo.parameter[1].setData(price);
+        funcInfo.parameter[2].setData(stoploss);
+        funcInfo.parameter[3].setData(takeprofit);
+        funcInfo.parameter[4].setData(expiration);
+        funcInfo.parameter[5].setData(arrow_color);
+        if (!SendReceiveRequest(funcInfo)) flagEmergencyStop = true;
+        LastError = funcInfo.errorCode;
+        return funcInfo.returnValue.getDataBool();
     }
     public boolean OrderDelete(int ticket, Color arrow_color)
     {
         FuncInfo funcInfo = new FuncInfo();
-        funcInfo.FuncName = "OrderDelete";
-        funcInfo.Parameter[0].SetData(ticket);
-        funcInfo.Parameter[1].SetData(arrow_color);
-        if (!SendReceiveRequest(funcInfo)) FlagEmergencyStop = true;
-        LastError = funcInfo.ErrorCode;
-        return funcInfo.ReturnValue.GetDataBool();
+        funcInfo.funcName = "OrderDelete";
+        funcInfo.parameter[0].setData(ticket);
+        funcInfo.parameter[1].setData(arrow_color);
+        if (!SendReceiveRequest(funcInfo)) flagEmergencyStop = true;
+        LastError = funcInfo.errorCode;
+        return funcInfo.returnValue.getDataBool();
     }
     public void OrderPrint()
     {
         FuncInfo funcInfo = new FuncInfo();
-        funcInfo.FuncName = "OrderPrint";
-        if (!SendReceiveRequest(funcInfo)) FlagEmergencyStop = true;
-        return ;
+        funcInfo.funcName = "OrderPrint";
+        if (!SendReceiveRequest(funcInfo)) flagEmergencyStop = true;
     }
     public int OrderTicket()
     {
         FuncInfo funcInfo = new FuncInfo();
-        funcInfo.FuncName = "OrderTicket";
-        if (!SendReceiveRequest(funcInfo)) FlagEmergencyStop = true;
-        LastError = funcInfo.ErrorCode;
-        return funcInfo.ReturnValue.GetDataInt();
+        funcInfo.funcName = "OrderTicket";
+        if (!SendReceiveRequest(funcInfo)) flagEmergencyStop = true;
+        LastError = funcInfo.errorCode;
+        return funcInfo.returnValue.getDataInt();
     }
     
     public LocalDateTime OrderOpenTime()
     {
         FuncInfo funcInfo = new FuncInfo();
-        funcInfo.FuncName = "OrderOpenTime";
-        if (!SendReceiveRequest(funcInfo)) FlagEmergencyStop = true;
-        LastError = funcInfo.ErrorCode;
-        return funcInfo.ReturnValue.GetDataDateTime();
+        funcInfo.funcName = "OrderOpenTime";
+        if (!SendReceiveRequest(funcInfo)) flagEmergencyStop = true;
+        LastError = funcInfo.errorCode;
+        return funcInfo.returnValue.getDataDateTime();
     }
     public double OrderOpenPrice()
     {
         FuncInfo funcInfo = new FuncInfo();
-        funcInfo.FuncName = "OrderOpenPrice";
-        if (!SendReceiveRequest(funcInfo)) FlagEmergencyStop = true;
-        LastError = funcInfo.ErrorCode;
-        return funcInfo.ReturnValue.GetDataDouble();
+        funcInfo.funcName = "OrderOpenPrice";
+        if (!SendReceiveRequest(funcInfo)) flagEmergencyStop = true;
+        LastError = funcInfo.errorCode;
+        return funcInfo.returnValue.getDataDouble();
     }
     public int OrderType()
     {
         FuncInfo funcInfo = new FuncInfo();
-        funcInfo.FuncName = "OrderType";
-        if (!SendReceiveRequest(funcInfo)) FlagEmergencyStop = true;
-        LastError = funcInfo.ErrorCode;
-        return funcInfo.ReturnValue.GetDataInt();
+        funcInfo.funcName = "OrderType";
+        if (!SendReceiveRequest(funcInfo)) flagEmergencyStop = true;
+        LastError = funcInfo.errorCode;
+        return funcInfo.returnValue.getDataInt();
     }
     public double OrderLots()
     {
         FuncInfo funcInfo = new FuncInfo();
-        funcInfo.FuncName = "OrderLots";
-        if (!SendReceiveRequest(funcInfo)) FlagEmergencyStop = true;
-        LastError = funcInfo.ErrorCode;
-        return funcInfo.ReturnValue.GetDataDouble();
+        funcInfo.funcName = "OrderLots";
+        if (!SendReceiveRequest(funcInfo)) flagEmergencyStop = true;
+        LastError = funcInfo.errorCode;
+        return funcInfo.returnValue.getDataDouble();
     }
     public String OrderSymbol()
     {
         FuncInfo funcInfo = new FuncInfo();
-        funcInfo.FuncName = "OrderSymbol";
-        if (!SendReceiveRequest(funcInfo)) FlagEmergencyStop = true;
-        LastError = funcInfo.ErrorCode;
-        return funcInfo.ReturnValue.GetDataString();
+        funcInfo.funcName = "OrderSymbol";
+        if (!SendReceiveRequest(funcInfo)) flagEmergencyStop = true;
+        LastError = funcInfo.errorCode;
+        return funcInfo.returnValue.getDataString();
     }
     public double OrderStopLoss()
     {
         FuncInfo funcInfo = new FuncInfo();
-        funcInfo.FuncName = "OrderStopLoss";
-        if (!SendReceiveRequest(funcInfo)) FlagEmergencyStop = true;
-        LastError = funcInfo.ErrorCode;
-        return funcInfo.ReturnValue.GetDataDouble();
+        funcInfo.funcName = "OrderStopLoss";
+        if (!SendReceiveRequest(funcInfo)) flagEmergencyStop = true;
+        LastError = funcInfo.errorCode;
+        return funcInfo.returnValue.getDataDouble();
     }
     public double OrderTakeProfit()
     {
         FuncInfo funcInfo = new FuncInfo();
-        funcInfo.FuncName = "OrderTakeProfit";
-        if (!SendReceiveRequest(funcInfo)) FlagEmergencyStop = true;
-        LastError = funcInfo.ErrorCode;
-        return funcInfo.ReturnValue.GetDataDouble();
+        funcInfo.funcName = "OrderTakeProfit";
+        if (!SendReceiveRequest(funcInfo)) flagEmergencyStop = true;
+        LastError = funcInfo.errorCode;
+        return funcInfo.returnValue.getDataDouble();
     }
     public LocalDateTime OrderCloseTime()
     {
         FuncInfo funcInfo = new FuncInfo();
-        funcInfo.FuncName = "OrderCloseTime";
-        if (!SendReceiveRequest(funcInfo)) FlagEmergencyStop = true;
-        LastError = funcInfo.ErrorCode;
-        return funcInfo.ReturnValue.GetDataDateTime();
+        funcInfo.funcName = "OrderCloseTime";
+        if (!SendReceiveRequest(funcInfo)) flagEmergencyStop = true;
+        LastError = funcInfo.errorCode;
+        return funcInfo.returnValue.getDataDateTime();
     }
     public double OrderClosePrice()
     {
         FuncInfo funcInfo = new FuncInfo();
-        funcInfo.FuncName = "OrderClosePrice";
-        if (!SendReceiveRequest(funcInfo)) FlagEmergencyStop = true;
-        LastError = funcInfo.ErrorCode;
-        return funcInfo.ReturnValue.GetDataDouble();
+        funcInfo.funcName = "OrderClosePrice";
+        if (!SendReceiveRequest(funcInfo)) flagEmergencyStop = true;
+        LastError = funcInfo.errorCode;
+        return funcInfo.returnValue.getDataDouble();
     }
     public double OrderCommission()
     {
         FuncInfo funcInfo = new FuncInfo();
-        funcInfo.FuncName = "OrderCommission";
-        if (!SendReceiveRequest(funcInfo)) FlagEmergencyStop = true;
-        LastError = funcInfo.ErrorCode;
-        return funcInfo.ReturnValue.GetDataDouble();
+        funcInfo.funcName = "OrderCommission";
+        if (!SendReceiveRequest(funcInfo)) flagEmergencyStop = true;
+        LastError = funcInfo.errorCode;
+        return funcInfo.returnValue.getDataDouble();
     }
     public LocalDateTime OrderExpiration()
     {
         FuncInfo funcInfo = new FuncInfo();
-        funcInfo.FuncName = "OrderExpiration";
-        if (!SendReceiveRequest(funcInfo)) FlagEmergencyStop = true;
-        LastError = funcInfo.ErrorCode;
-        return funcInfo.ReturnValue.GetDataDateTime();
+        funcInfo.funcName = "OrderExpiration";
+        if (!SendReceiveRequest(funcInfo)) flagEmergencyStop = true;
+        LastError = funcInfo.errorCode;
+        return funcInfo.returnValue.getDataDateTime();
     }
     public double OrderSwap()
     {
         FuncInfo funcInfo = new FuncInfo();
-        funcInfo.FuncName = "OrderSwap";
-        if (!SendReceiveRequest(funcInfo)) FlagEmergencyStop = true;
-        LastError = funcInfo.ErrorCode;
-        return funcInfo.ReturnValue.GetDataDouble();
+        funcInfo.funcName = "OrderSwap";
+        if (!SendReceiveRequest(funcInfo)) flagEmergencyStop = true;
+        LastError = funcInfo.errorCode;
+        return funcInfo.returnValue.getDataDouble();
     }
     public double OrderProfit()
     {
         FuncInfo funcInfo = new FuncInfo();
-        funcInfo.FuncName = "OrderProfit";
-        if (!SendReceiveRequest(funcInfo)) FlagEmergencyStop = true;
-        LastError = funcInfo.ErrorCode;
-        return funcInfo.ReturnValue.GetDataDouble();
+        funcInfo.funcName = "OrderProfit";
+        if (!SendReceiveRequest(funcInfo)) flagEmergencyStop = true;
+        LastError = funcInfo.errorCode;
+        return funcInfo.returnValue.getDataDouble();
     }
     public String OrderComment()
     {
         FuncInfo funcInfo = new FuncInfo();
-        funcInfo.FuncName = "OrderComment";
-        if (!SendReceiveRequest(funcInfo)) FlagEmergencyStop = true;
-        LastError = funcInfo.ErrorCode;
-        return funcInfo.ReturnValue.GetDataString();
+        funcInfo.funcName = "OrderComment";
+        if (!SendReceiveRequest(funcInfo)) flagEmergencyStop = true;
+        LastError = funcInfo.errorCode;
+        return funcInfo.returnValue.getDataString();
     }
     public int OrderMagicNumber()
     {
         FuncInfo funcInfo = new FuncInfo();
-        funcInfo.FuncName = "OrderMagicNumber";
-        if (!SendReceiveRequest(funcInfo)) FlagEmergencyStop = true;
-        LastError = funcInfo.ErrorCode;
-        return funcInfo.ReturnValue.GetDataInt();
+        funcInfo.funcName = "OrderMagicNumber";
+        if (!SendReceiveRequest(funcInfo)) flagEmergencyStop = true;
+        LastError = funcInfo.errorCode;
+        return funcInfo.returnValue.getDataInt();
     }
     
     //  トレードシグナル
@@ -1140,599 +1139,596 @@ public abstract class Connector
     public boolean GlobalVariableCheck(String name)
     {
         FuncInfo funcInfo = new FuncInfo();
-        funcInfo.FuncName = "GlobalVariableCheck";
-        funcInfo.Parameter[0].SetData(name);
-        if (!SendReceiveRequest(funcInfo)) FlagEmergencyStop = true;
-        return funcInfo.ReturnValue.GetDataBool();
+        funcInfo.funcName = "GlobalVariableCheck";
+        funcInfo.parameter[0].setData(name);
+        if (!SendReceiveRequest(funcInfo)) flagEmergencyStop = true;
+        return funcInfo.returnValue.getDataBool();
     }
     public LocalDateTime GlobalVariableTime(String name)
     {
         FuncInfo funcInfo = new FuncInfo();
-        funcInfo.FuncName = "GlobalVariableTime";
-        funcInfo.Parameter[0].SetData(name);
-        if (!SendReceiveRequest(funcInfo)) FlagEmergencyStop = true;
-        LastError = funcInfo.ErrorCode;
-        return funcInfo.ReturnValue.GetDataDateTime();
+        funcInfo.funcName = "GlobalVariableTime";
+        funcInfo.parameter[0].setData(name);
+        if (!SendReceiveRequest(funcInfo)) flagEmergencyStop = true;
+        LastError = funcInfo.errorCode;
+        return funcInfo.returnValue.getDataDateTime();
     }
     public boolean GlobalVariableDel(String name)
     {
         FuncInfo funcInfo = new FuncInfo();
-        funcInfo.FuncName = "GlobalVariableDel";
-        funcInfo.Parameter[0].SetData(name);
-        if (!SendReceiveRequest(funcInfo)) FlagEmergencyStop = true;
-        LastError = funcInfo.ErrorCode;
-        return funcInfo.ReturnValue.GetDataBool();
+        funcInfo.funcName = "GlobalVariableDel";
+        funcInfo.parameter[0].setData(name);
+        if (!SendReceiveRequest(funcInfo)) flagEmergencyStop = true;
+        LastError = funcInfo.errorCode;
+        return funcInfo.returnValue.getDataBool();
     }
     public double GlobalVariableGet(String name)
     {
         FuncInfo funcInfo = new FuncInfo();
-        funcInfo.FuncName = "GlobalVariableGet";
-        funcInfo.Parameter[0].SetData(name);
-        if (!SendReceiveRequest(funcInfo)) FlagEmergencyStop = true;
-        LastError = funcInfo.ErrorCode;
-        return funcInfo.ReturnValue.GetDataDouble();
+        funcInfo.funcName = "GlobalVariableGet";
+        funcInfo.parameter[0].setData(name);
+        if (!SendReceiveRequest(funcInfo)) flagEmergencyStop = true;
+        LastError = funcInfo.errorCode;
+        return funcInfo.returnValue.getDataDouble();
     }
     public String GlobalVariableName(int index)
     {
         FuncInfo funcInfo = new FuncInfo();
-        funcInfo.FuncName = "GlobalVariableName";
-        funcInfo.Parameter[0].SetData(index);
-        if (!SendReceiveRequest(funcInfo)) FlagEmergencyStop = true;
-        LastError = funcInfo.ErrorCode;
-        return funcInfo.ReturnValue.GetDataString();
+        funcInfo.funcName = "GlobalVariableName";
+        funcInfo.parameter[0].setData(index);
+        if (!SendReceiveRequest(funcInfo)) flagEmergencyStop = true;
+        LastError = funcInfo.errorCode;
+        return funcInfo.returnValue.getDataString();
     }
     public LocalDateTime GlobalVariableSet(String name, double value)
     {
         FuncInfo funcInfo = new FuncInfo();
-        funcInfo.FuncName = "GlobalVariableSet";
-        funcInfo.Parameter[0].SetData(name);
-        funcInfo.Parameter[1].SetData(value);
-        if (!SendReceiveRequest(funcInfo)) FlagEmergencyStop = true;
-        LastError = funcInfo.ErrorCode;
-        return funcInfo.ReturnValue.GetDataDateTime();
+        funcInfo.funcName = "GlobalVariableSet";
+        funcInfo.parameter[0].setData(name);
+        funcInfo.parameter[1].setData(value);
+        if (!SendReceiveRequest(funcInfo)) flagEmergencyStop = true;
+        LastError = funcInfo.errorCode;
+        return funcInfo.returnValue.getDataDateTime();
     }
     public void GlobalVariablesFlush()
     {
         FuncInfo funcInfo = new FuncInfo();
-        funcInfo.FuncName = "GlobalVariablesFlush";
-        if (!SendReceiveRequest(funcInfo)) FlagEmergencyStop = true;
-        return;
+        funcInfo.funcName = "GlobalVariablesFlush";
+        if (!SendReceiveRequest(funcInfo)) flagEmergencyStop = true;
     }
     public boolean GlobalVariableTemp(String name)
     {
         FuncInfo funcInfo = new FuncInfo();
-        funcInfo.FuncName = "GlobalVariableTemp";
-        funcInfo.Parameter[0].SetData(name);
-        if (!SendReceiveRequest(funcInfo)) FlagEmergencyStop = true;
-        LastError = funcInfo.ErrorCode;
-        return funcInfo.ReturnValue.GetDataBool();
+        funcInfo.funcName = "GlobalVariableTemp";
+        funcInfo.parameter[0].setData(name);
+        if (!SendReceiveRequest(funcInfo)) flagEmergencyStop = true;
+        LastError = funcInfo.errorCode;
+        return funcInfo.returnValue.getDataBool();
     }
     public boolean GlobalVariableSetOnCondition(String name, double value, double check_value)
     {
         FuncInfo funcInfo = new FuncInfo();
-        funcInfo.FuncName = "GlobalVariableSetOnCondition";
-        funcInfo.Parameter[0].SetData(name);
-        funcInfo.Parameter[1].SetData(value);
-        funcInfo.Parameter[2].SetData(check_value);
-        if (!SendReceiveRequest(funcInfo)) FlagEmergencyStop = true;
-        LastError = funcInfo.ErrorCode;
-        return funcInfo.ReturnValue.GetDataBool();
+        funcInfo.funcName = "GlobalVariableSetOnCondition";
+        funcInfo.parameter[0].setData(name);
+        funcInfo.parameter[1].setData(value);
+        funcInfo.parameter[2].setData(check_value);
+        if (!SendReceiveRequest(funcInfo)) flagEmergencyStop = true;
+        LastError = funcInfo.errorCode;
+        return funcInfo.returnValue.getDataBool();
     }
     
     public int GlobalVariablesDeleteAll()
     {
         FuncInfo funcInfo = new FuncInfo();
-        funcInfo.FuncName = "GlobalVariablesDeleteAll1";
-        if (!SendReceiveRequest(funcInfo)) FlagEmergencyStop = true;
-        return funcInfo.ReturnValue.GetDataInt();
+        funcInfo.funcName = "GlobalVariablesDeleteAll1";
+        if (!SendReceiveRequest(funcInfo)) flagEmergencyStop = true;
+        return funcInfo.returnValue.getDataInt();
     }
     public int GlobalVariablesDeleteAll(String prefix_name)
     {
         FuncInfo funcInfo = new FuncInfo();
-        funcInfo.FuncName = "GlobalVariablesDeleteAll2";
-        funcInfo.Parameter[0].SetData(prefix_name);
-        if (!SendReceiveRequest(funcInfo)) FlagEmergencyStop = true;
-        return funcInfo.ReturnValue.GetDataInt();
+        funcInfo.funcName = "GlobalVariablesDeleteAll2";
+        funcInfo.parameter[0].setData(prefix_name);
+        if (!SendReceiveRequest(funcInfo)) flagEmergencyStop = true;
+        return funcInfo.returnValue.getDataInt();
     }
     public int GlobalVariablesDeleteAll(String prefix_name, LocalDateTime limit_data)
     {
         FuncInfo funcInfo = new FuncInfo();
-        funcInfo.FuncName = "GlobalVariablesDeleteAll3";
-        funcInfo.Parameter[0].SetData(prefix_name);
-        funcInfo.Parameter[1].SetData(limit_data);
-        if (!SendReceiveRequest(funcInfo)) FlagEmergencyStop = true;
-        return funcInfo.ReturnValue.GetDataInt();
+        funcInfo.funcName = "GlobalVariablesDeleteAll3";
+        funcInfo.parameter[0].setData(prefix_name);
+        funcInfo.parameter[1].setData(limit_data);
+        if (!SendReceiveRequest(funcInfo)) flagEmergencyStop = true;
+        return funcInfo.returnValue.getDataInt();
     }
     public int GlobalVariablesTotal()
     {
         FuncInfo funcInfo = new FuncInfo();
-        funcInfo.FuncName = "GlobalVariablesTotal";
-        if (!SendReceiveRequest(funcInfo)) FlagEmergencyStop = true;
-        return funcInfo.ReturnValue.GetDataInt();
+        funcInfo.funcName = "GlobalVariablesTotal";
+        if (!SendReceiveRequest(funcInfo)) flagEmergencyStop = true;
+        return funcInfo.returnValue.getDataInt();
     }
     //  オブジェクト関数
     public boolean ObjectCreate(long chart_id, String object_name, int object_type, int sub_window, LocalDateTime time1, double price1)
     {
         FuncInfo funcInfo = new FuncInfo();
-        funcInfo.FuncName = "ObjectCreate1";
-        funcInfo.Parameter[0].SetData(chart_id);
-        funcInfo.Parameter[1].SetData(object_name);
-        funcInfo.Parameter[2].SetData(object_type);
-        funcInfo.Parameter[3].SetData(sub_window);
-        funcInfo.Parameter[4].SetData(time1);
-        funcInfo.Parameter[5].SetData(price1);
-        if (!SendReceiveRequest(funcInfo)) FlagEmergencyStop = true;
-        LastError = funcInfo.ErrorCode;
-        return funcInfo.ReturnValue.GetDataBool();
+        funcInfo.funcName = "ObjectCreate1";
+        funcInfo.parameter[0].setData(chart_id);
+        funcInfo.parameter[1].setData(object_name);
+        funcInfo.parameter[2].setData(object_type);
+        funcInfo.parameter[3].setData(sub_window);
+        funcInfo.parameter[4].setData(time1);
+        funcInfo.parameter[5].setData(price1);
+        if (!SendReceiveRequest(funcInfo)) flagEmergencyStop = true;
+        LastError = funcInfo.errorCode;
+        return funcInfo.returnValue.getDataBool();
     }
     public boolean ObjectCreate(long chart_id, String object_name, int object_type, int sub_window, LocalDateTime time1, double price1, LocalDateTime time2, double price2)
     {
         FuncInfo funcInfo = new FuncInfo();
-        funcInfo.FuncName = "ObjectCreate2";
-        funcInfo.Parameter[0].SetData(chart_id);
-        funcInfo.Parameter[1].SetData(object_name);
-        funcInfo.Parameter[2].SetData(object_type);
-        funcInfo.Parameter[3].SetData(sub_window);
-        funcInfo.Parameter[4].SetData(time1);
-        funcInfo.Parameter[5].SetData(price1);
-        funcInfo.Parameter[6].SetData(time2);
-        funcInfo.Parameter[7].SetData(price2);
-        if (!SendReceiveRequest(funcInfo)) FlagEmergencyStop = true;
-        LastError = funcInfo.ErrorCode;
-        return funcInfo.ReturnValue.GetDataBool();
+        funcInfo.funcName = "ObjectCreate2";
+        funcInfo.parameter[0].setData(chart_id);
+        funcInfo.parameter[1].setData(object_name);
+        funcInfo.parameter[2].setData(object_type);
+        funcInfo.parameter[3].setData(sub_window);
+        funcInfo.parameter[4].setData(time1);
+        funcInfo.parameter[5].setData(price1);
+        funcInfo.parameter[6].setData(time2);
+        funcInfo.parameter[7].setData(price2);
+        if (!SendReceiveRequest(funcInfo)) flagEmergencyStop = true;
+        LastError = funcInfo.errorCode;
+        return funcInfo.returnValue.getDataBool();
     }
     public boolean ObjectCreate(long chart_id, String object_name, int object_type, int sub_window, LocalDateTime time1, double price1, LocalDateTime time2, double price2, LocalDateTime time3, double price3)
     {
         FuncInfo funcInfo = new FuncInfo();
-        funcInfo.FuncName = "ObjectCreate3";
-        funcInfo.Parameter[0].SetData(chart_id);
-        funcInfo.Parameter[1].SetData(object_name);
-        funcInfo.Parameter[2].SetData(object_type);
-        funcInfo.Parameter[3].SetData(sub_window);
-        funcInfo.Parameter[4].SetData(time1);
-        funcInfo.Parameter[5].SetData(price1);
-        funcInfo.Parameter[6].SetData(time2);
-        funcInfo.Parameter[7].SetData(price2);
-        funcInfo.Parameter[8].SetData(time2);
-        funcInfo.Parameter[9].SetData(price2);
-        if (!SendReceiveRequest(funcInfo)) FlagEmergencyStop = true;
-        LastError = funcInfo.ErrorCode;
-        return funcInfo.ReturnValue.GetDataBool();
+        funcInfo.funcName = "ObjectCreate3";
+        funcInfo.parameter[0].setData(chart_id);
+        funcInfo.parameter[1].setData(object_name);
+        funcInfo.parameter[2].setData(object_type);
+        funcInfo.parameter[3].setData(sub_window);
+        funcInfo.parameter[4].setData(time1);
+        funcInfo.parameter[5].setData(price1);
+        funcInfo.parameter[6].setData(time2);
+        funcInfo.parameter[7].setData(price2);
+        funcInfo.parameter[8].setData(time2);
+        funcInfo.parameter[9].setData(price2);
+        if (!SendReceiveRequest(funcInfo)) flagEmergencyStop = true;
+        LastError = funcInfo.errorCode;
+        return funcInfo.returnValue.getDataBool();
     }
     public String ObjectName(long chart_id, int object_index, int sub_window, int object_type)
     {
         FuncInfo funcInfo = new FuncInfo();
-        funcInfo.FuncName = "ObjectName1";
-        funcInfo.Parameter[0].SetData(chart_id);
-        funcInfo.Parameter[1].SetData(object_index);
-        funcInfo.Parameter[2].SetData(sub_window);
-        funcInfo.Parameter[3].SetData(object_type);
-        if (!SendReceiveRequest(funcInfo)) FlagEmergencyStop = true;
-        LastError = funcInfo.ErrorCode;
-        return funcInfo.ReturnValue.GetDataString();
+        funcInfo.funcName = "ObjectName1";
+        funcInfo.parameter[0].setData(chart_id);
+        funcInfo.parameter[1].setData(object_index);
+        funcInfo.parameter[2].setData(sub_window);
+        funcInfo.parameter[3].setData(object_type);
+        if (!SendReceiveRequest(funcInfo)) flagEmergencyStop = true;
+        LastError = funcInfo.errorCode;
+        return funcInfo.returnValue.getDataString();
     }
     public String ObjectName(long chart_id, int object_index)
     {
         FuncInfo funcInfo = new FuncInfo();
-        funcInfo.FuncName = "ObjectName1";
-        funcInfo.Parameter[0].SetData(chart_id);
-        funcInfo.Parameter[1].SetData(object_index);
-        funcInfo.Parameter[2].SetData(-1);
-        funcInfo.Parameter[3].SetData(-1);
-        if (!SendReceiveRequest(funcInfo)) FlagEmergencyStop = true;
-        LastError = funcInfo.ErrorCode;
-        return funcInfo.ReturnValue.GetDataString();
+        funcInfo.funcName = "ObjectName1";
+        funcInfo.parameter[0].setData(chart_id);
+        funcInfo.parameter[1].setData(object_index);
+        funcInfo.parameter[2].setData(-1);
+        funcInfo.parameter[3].setData(-1);
+        if (!SendReceiveRequest(funcInfo)) flagEmergencyStop = true;
+        LastError = funcInfo.errorCode;
+        return funcInfo.returnValue.getDataString();
     }
     public String ObjectName(long chart_id, int object_index, int sub_window)
     {
         FuncInfo funcInfo = new FuncInfo();
-        funcInfo.FuncName = "ObjectName1";
-        funcInfo.Parameter[0].SetData(chart_id);
-        funcInfo.Parameter[1].SetData(object_index);
-        funcInfo.Parameter[2].SetData(sub_window);
-        funcInfo.Parameter[3].SetData(-1);
-        if (!SendReceiveRequest(funcInfo)) FlagEmergencyStop = true;
-        LastError = funcInfo.ErrorCode;
-        return funcInfo.ReturnValue.GetDataString();
+        funcInfo.funcName = "ObjectName1";
+        funcInfo.parameter[0].setData(chart_id);
+        funcInfo.parameter[1].setData(object_index);
+        funcInfo.parameter[2].setData(sub_window);
+        funcInfo.parameter[3].setData(-1);
+        if (!SendReceiveRequest(funcInfo)) flagEmergencyStop = true;
+        LastError = funcInfo.errorCode;
+        return funcInfo.returnValue.getDataString();
     }    
     public String ObjectName(int object_index)
     {
         FuncInfo funcInfo = new FuncInfo();
-        funcInfo.FuncName = "ObjectName2";
-        funcInfo.Parameter[0].SetData(object_index);
-        if (!SendReceiveRequest(funcInfo)) FlagEmergencyStop = true;
-        LastError = funcInfo.ErrorCode;
-        return funcInfo.ReturnValue.GetDataString();
+        funcInfo.funcName = "ObjectName2";
+        funcInfo.parameter[0].setData(object_index);
+        if (!SendReceiveRequest(funcInfo)) flagEmergencyStop = true;
+        LastError = funcInfo.errorCode;
+        return funcInfo.returnValue.getDataString();
     }
     public boolean ObjectDelete(String object_name)
     {
         FuncInfo funcInfo = new FuncInfo();
-        funcInfo.FuncName = "ObjectDelete1";
-        funcInfo.Parameter[0].SetData(object_name);
-        if (!SendReceiveRequest(funcInfo)) FlagEmergencyStop = true;
-        LastError = funcInfo.ErrorCode;
-        return funcInfo.ReturnValue.GetDataBool();
+        funcInfo.funcName = "ObjectDelete1";
+        funcInfo.parameter[0].setData(object_name);
+        if (!SendReceiveRequest(funcInfo)) flagEmergencyStop = true;
+        LastError = funcInfo.errorCode;
+        return funcInfo.returnValue.getDataBool();
     }
     public boolean ObjectDelete(long chart_id, String object_name)
     {
         FuncInfo funcInfo = new FuncInfo();
-        funcInfo.FuncName = "ObjectDelete2";
-        funcInfo.Parameter[0].SetData(chart_id);
-        funcInfo.Parameter[1].SetData(object_name);
-        if (!SendReceiveRequest(funcInfo)) FlagEmergencyStop = true;
-        LastError = funcInfo.ErrorCode;
-        return funcInfo.ReturnValue.GetDataBool();
+        funcInfo.funcName = "ObjectDelete2";
+        funcInfo.parameter[0].setData(chart_id);
+        funcInfo.parameter[1].setData(object_name);
+        if (!SendReceiveRequest(funcInfo)) flagEmergencyStop = true;
+        LastError = funcInfo.errorCode;
+        return funcInfo.returnValue.getDataBool();
     }
     
     public boolean ObjectsDeleteAll(long chart_id, int sub_window, int object_type)
     {
         FuncInfo funcInfo = new FuncInfo();
-        funcInfo.FuncName = "ObjectsDeleteAll1";
-        funcInfo.Parameter[0].SetData(chart_id);
-        funcInfo.Parameter[1].SetData(sub_window);
-        funcInfo.Parameter[2].SetData(object_type);
-        if (!SendReceiveRequest(funcInfo)) FlagEmergencyStop = true;
-        LastError = funcInfo.ErrorCode;
-        return funcInfo.ReturnValue.GetDataBool();
+        funcInfo.funcName = "ObjectsDeleteAll1";
+        funcInfo.parameter[0].setData(chart_id);
+        funcInfo.parameter[1].setData(sub_window);
+        funcInfo.parameter[2].setData(object_type);
+        if (!SendReceiveRequest(funcInfo)) flagEmergencyStop = true;
+        LastError = funcInfo.errorCode;
+        return funcInfo.returnValue.getDataBool();
     }    
     public boolean ObjectsDeleteAll(long chart_id)
     {
         FuncInfo funcInfo = new FuncInfo();
-        funcInfo.FuncName = "ObjectsDeleteAll1";
-        funcInfo.Parameter[0].SetData(chart_id);
-        funcInfo.Parameter[1].SetData(-1);
-        funcInfo.Parameter[2].SetData(-1);
-        if (!SendReceiveRequest(funcInfo)) FlagEmergencyStop = true;
-        LastError = funcInfo.ErrorCode;
-        return funcInfo.ReturnValue.GetDataBool();
+        funcInfo.funcName = "ObjectsDeleteAll1";
+        funcInfo.parameter[0].setData(chart_id);
+        funcInfo.parameter[1].setData(-1);
+        funcInfo.parameter[2].setData(-1);
+        if (!SendReceiveRequest(funcInfo)) flagEmergencyStop = true;
+        LastError = funcInfo.errorCode;
+        return funcInfo.returnValue.getDataBool();
     }
     public boolean ObjectsDeleteAll(long chart_id, int sub_window)
     {
         FuncInfo funcInfo = new FuncInfo();
-        funcInfo.FuncName = "ObjectsDeleteAll1";
-        funcInfo.Parameter[0].SetData(chart_id);
-        funcInfo.Parameter[1].SetData(sub_window);
-        funcInfo.Parameter[2].SetData(-1);
-        if (!SendReceiveRequest(funcInfo)) FlagEmergencyStop = true;
-        LastError = funcInfo.ErrorCode;
-        return funcInfo.ReturnValue.GetDataBool();
+        funcInfo.funcName = "ObjectsDeleteAll1";
+        funcInfo.parameter[0].setData(chart_id);
+        funcInfo.parameter[1].setData(sub_window);
+        funcInfo.parameter[2].setData(-1);
+        if (!SendReceiveRequest(funcInfo)) flagEmergencyStop = true;
+        LastError = funcInfo.errorCode;
+        return funcInfo.returnValue.getDataBool();
     }
     public boolean ObjectsDeleteAll(long chart_id, String prefix, int sub_window, int object_type)
     {
         FuncInfo funcInfo = new FuncInfo();
-        funcInfo.FuncName = "ObjectsDeleteAll2";
-        funcInfo.Parameter[0].SetData(chart_id);
-        funcInfo.Parameter[1].SetData(prefix);
-        funcInfo.Parameter[2].SetData(sub_window);
-        funcInfo.Parameter[3].SetData(object_type);
-        if (!SendReceiveRequest(funcInfo)) FlagEmergencyStop = true;
-        LastError = funcInfo.ErrorCode;
-        return funcInfo.ReturnValue.GetDataBool();
+        funcInfo.funcName = "ObjectsDeleteAll2";
+        funcInfo.parameter[0].setData(chart_id);
+        funcInfo.parameter[1].setData(prefix);
+        funcInfo.parameter[2].setData(sub_window);
+        funcInfo.parameter[3].setData(object_type);
+        if (!SendReceiveRequest(funcInfo)) flagEmergencyStop = true;
+        LastError = funcInfo.errorCode;
+        return funcInfo.returnValue.getDataBool();
     }
     public boolean ObjectsDeleteAll(long chart_id, String prefix)
     {
         FuncInfo funcInfo = new FuncInfo();
-        funcInfo.FuncName = "ObjectsDeleteAll2";
-        funcInfo.Parameter[0].SetData(chart_id);
-        funcInfo.Parameter[1].SetData(prefix);
-        funcInfo.Parameter[2].SetData(-1);
-        funcInfo.Parameter[3].SetData(-1);
-        if (!SendReceiveRequest(funcInfo)) FlagEmergencyStop = true;
-        LastError = funcInfo.ErrorCode;
-        return funcInfo.ReturnValue.GetDataBool();
+        funcInfo.funcName = "ObjectsDeleteAll2";
+        funcInfo.parameter[0].setData(chart_id);
+        funcInfo.parameter[1].setData(prefix);
+        funcInfo.parameter[2].setData(-1);
+        funcInfo.parameter[3].setData(-1);
+        if (!SendReceiveRequest(funcInfo)) flagEmergencyStop = true;
+        LastError = funcInfo.errorCode;
+        return funcInfo.returnValue.getDataBool();
     }
     public boolean ObjectsDeleteAll(long chart_id, String prefix, int sub_window)
     {
         FuncInfo funcInfo = new FuncInfo();
-        funcInfo.FuncName = "ObjectsDeleteAll2";
-        funcInfo.Parameter[0].SetData(chart_id);
-        funcInfo.Parameter[1].SetData(prefix);
-        funcInfo.Parameter[2].SetData(sub_window);
-        funcInfo.Parameter[3].SetData(-1);
-        if (!SendReceiveRequest(funcInfo)) FlagEmergencyStop = true;
-        LastError = funcInfo.ErrorCode;
-        return funcInfo.ReturnValue.GetDataBool();
+        funcInfo.funcName = "ObjectsDeleteAll2";
+        funcInfo.parameter[0].setData(chart_id);
+        funcInfo.parameter[1].setData(prefix);
+        funcInfo.parameter[2].setData(sub_window);
+        funcInfo.parameter[3].setData(-1);
+        if (!SendReceiveRequest(funcInfo)) flagEmergencyStop = true;
+        LastError = funcInfo.errorCode;
+        return funcInfo.returnValue.getDataBool();
     }
     public boolean ObjectsDeleteAll(int sub_window, int object_type)
     {
         FuncInfo funcInfo = new FuncInfo();
-        funcInfo.FuncName = "ObjectsDeleteAll3";
-        funcInfo.Parameter[0].SetData(sub_window);
-        funcInfo.Parameter[1].SetData(object_type);
-        if (!SendReceiveRequest(funcInfo)) FlagEmergencyStop = true;
-        LastError = funcInfo.ErrorCode;
-        return funcInfo.ReturnValue.GetDataBool();
+        funcInfo.funcName = "ObjectsDeleteAll3";
+        funcInfo.parameter[0].setData(sub_window);
+        funcInfo.parameter[1].setData(object_type);
+        if (!SendReceiveRequest(funcInfo)) flagEmergencyStop = true;
+        LastError = funcInfo.errorCode;
+        return funcInfo.returnValue.getDataBool();
     }
     public boolean ObjectsDeleteAll()
     {
         FuncInfo funcInfo = new FuncInfo();
-        funcInfo.FuncName = "ObjectsDeleteAll3";
-        funcInfo.Parameter[0].SetData(-1);
-        funcInfo.Parameter[1].SetData(-1);
-        if (!SendReceiveRequest(funcInfo)) FlagEmergencyStop = true;
-        LastError = funcInfo.ErrorCode;
-        return funcInfo.ReturnValue.GetDataBool();
+        funcInfo.funcName = "ObjectsDeleteAll3";
+        funcInfo.parameter[0].setData(-1);
+        funcInfo.parameter[1].setData(-1);
+        if (!SendReceiveRequest(funcInfo)) flagEmergencyStop = true;
+        LastError = funcInfo.errorCode;
+        return funcInfo.returnValue.getDataBool();
     }
     public boolean ObjectsDeleteAll(int sub_window)
     {
         FuncInfo funcInfo = new FuncInfo();
-        funcInfo.FuncName = "ObjectsDeleteAll3";
-        funcInfo.Parameter[0].SetData(sub_window);
-        funcInfo.Parameter[1].SetData(-1);
-        if (!SendReceiveRequest(funcInfo)) FlagEmergencyStop = true;
-        LastError = funcInfo.ErrorCode;
-        return funcInfo.ReturnValue.GetDataBool();
+        funcInfo.funcName = "ObjectsDeleteAll3";
+        funcInfo.parameter[0].setData(sub_window);
+        funcInfo.parameter[1].setData(-1);
+        if (!SendReceiveRequest(funcInfo)) flagEmergencyStop = true;
+        LastError = funcInfo.errorCode;
+        return funcInfo.returnValue.getDataBool();
     }
     int ObjectFind(long chart_id, String object_name)
     {
         FuncInfo funcInfo = new FuncInfo();
-        funcInfo.FuncName = "ObjectFind1";
-        funcInfo.Parameter[0].SetData(chart_id);
-        funcInfo.Parameter[1].SetData(object_name);
-        if (!SendReceiveRequest(funcInfo)) FlagEmergencyStop = true;
-        LastError = funcInfo.ErrorCode;
-        return funcInfo.ReturnValue.GetDataInt();
+        funcInfo.funcName = "ObjectFind1";
+        funcInfo.parameter[0].setData(chart_id);
+        funcInfo.parameter[1].setData(object_name);
+        if (!SendReceiveRequest(funcInfo)) flagEmergencyStop = true;
+        LastError = funcInfo.errorCode;
+        return funcInfo.returnValue.getDataInt();
     }    
     int ObjectFind(String name)
     {
         FuncInfo funcInfo = new FuncInfo();
-        funcInfo.FuncName = "ObjectFind2";
-        funcInfo.Parameter[0].SetData(name);
-        if (!SendReceiveRequest(funcInfo)) FlagEmergencyStop = true;
-        LastError = funcInfo.ErrorCode;
-        return funcInfo.ReturnValue.GetDataInt();
+        funcInfo.funcName = "ObjectFind2";
+        funcInfo.parameter[0].setData(name);
+        if (!SendReceiveRequest(funcInfo)) flagEmergencyStop = true;
+        LastError = funcInfo.errorCode;
+        return funcInfo.returnValue.getDataInt();
     }
     public LocalDateTime ObjectGetTimeByValue(long chart_id, String object_name, double value, int line_id)
     {
         FuncInfo funcInfo = new FuncInfo();
-        funcInfo.FuncName = "ObjectGetTimeByValue";
-        funcInfo.Parameter[0].SetData(chart_id);
-        funcInfo.Parameter[1].SetData(object_name);
-        funcInfo.Parameter[2].SetData(value);
-        funcInfo.Parameter[3].SetData(line_id);
-        if (!SendReceiveRequest(funcInfo)) FlagEmergencyStop = true;
-        return funcInfo.ReturnValue.GetDataDateTime();
+        funcInfo.funcName = "ObjectGetTimeByValue";
+        funcInfo.parameter[0].setData(chart_id);
+        funcInfo.parameter[1].setData(object_name);
+        funcInfo.parameter[2].setData(value);
+        funcInfo.parameter[3].setData(line_id);
+        if (!SendReceiveRequest(funcInfo)) flagEmergencyStop = true;
+        return funcInfo.returnValue.getDataDateTime();
     }
     public LocalDateTime ObjectGetTimeByValue(long chart_id, String object_name, double value)
     {
         FuncInfo funcInfo = new FuncInfo();
-        funcInfo.FuncName = "ObjectGetTimeByValue";
-        funcInfo.Parameter[0].SetData(chart_id);
-        funcInfo.Parameter[1].SetData(object_name);
-        funcInfo.Parameter[2].SetData(value);
-        funcInfo.Parameter[3].SetData(0);
-        if (!SendReceiveRequest(funcInfo)) FlagEmergencyStop = true;
-        return funcInfo.ReturnValue.GetDataDateTime();
+        funcInfo.funcName = "ObjectGetTimeByValue";
+        funcInfo.parameter[0].setData(chart_id);
+        funcInfo.parameter[1].setData(object_name);
+        funcInfo.parameter[2].setData(value);
+        funcInfo.parameter[3].setData(0);
+        if (!SendReceiveRequest(funcInfo)) flagEmergencyStop = true;
+        return funcInfo.returnValue.getDataDateTime();
     }
     public double ObjectGetValueByShift(String name, int shift)
     {
         FuncInfo funcInfo = new FuncInfo();
-        funcInfo.FuncName = "ObjectGetValueByShift";
-        funcInfo.Parameter[0].SetData(name);
-        funcInfo.Parameter[1].SetData(shift);
-        if (!SendReceiveRequest(funcInfo)) FlagEmergencyStop = true;
-        return funcInfo.ReturnValue.GetDataDouble();
+        funcInfo.funcName = "ObjectGetValueByShift";
+        funcInfo.parameter[0].setData(name);
+        funcInfo.parameter[1].setData(shift);
+        if (!SendReceiveRequest(funcInfo)) flagEmergencyStop = true;
+        return funcInfo.returnValue.getDataDouble();
     }
     public double ObjectGetValueByTime(long chart_id, String object_name, LocalDateTime time, int line_id)
     {
         FuncInfo funcInfo = new FuncInfo();
-        funcInfo.FuncName = "ObjectGetValueByShift";
-        funcInfo.Parameter[0].SetData(chart_id);
-        funcInfo.Parameter[1].SetData(object_name);
-        funcInfo.Parameter[2].SetData(time);
-        funcInfo.Parameter[3].SetData(line_id);
-        if (!SendReceiveRequest(funcInfo)) FlagEmergencyStop = true;
-        return funcInfo.ReturnValue.GetDataDouble();
+        funcInfo.funcName = "ObjectGetValueByShift";
+        funcInfo.parameter[0].setData(chart_id);
+        funcInfo.parameter[1].setData(object_name);
+        funcInfo.parameter[2].setData(time);
+        funcInfo.parameter[3].setData(line_id);
+        if (!SendReceiveRequest(funcInfo)) flagEmergencyStop = true;
+        return funcInfo.returnValue.getDataDouble();
     }
     public double ObjectGetValueByTime(long chart_id, String object_name, LocalDateTime time)
     {
         FuncInfo funcInfo = new FuncInfo();
-        funcInfo.FuncName = "ObjectGetValueByShift";
-        funcInfo.Parameter[0].SetData(chart_id);
-        funcInfo.Parameter[1].SetData(object_name);
-        funcInfo.Parameter[2].SetData(time);
-        funcInfo.Parameter[3].SetData(0);
-        if (!SendReceiveRequest(funcInfo)) FlagEmergencyStop = true;
-        return funcInfo.ReturnValue.GetDataDouble();
+        funcInfo.funcName = "ObjectGetValueByShift";
+        funcInfo.parameter[0].setData(chart_id);
+        funcInfo.parameter[1].setData(object_name);
+        funcInfo.parameter[2].setData(time);
+        funcInfo.parameter[3].setData(0);
+        if (!SendReceiveRequest(funcInfo)) flagEmergencyStop = true;
+        return funcInfo.returnValue.getDataDouble();
     }
     public boolean ObjectMove(long chart_id, String object_name, int point_index, LocalDateTime time, double price)
     {
         FuncInfo funcInfo = new FuncInfo();
-        funcInfo.FuncName = "ObjectMove1";
-        funcInfo.Parameter[0].SetData(chart_id);
-        funcInfo.Parameter[1].SetData(object_name);
-        funcInfo.Parameter[2].SetData(point_index);
-        funcInfo.Parameter[3].SetData(time);
-        funcInfo.Parameter[4].SetData(price);
-        if (!SendReceiveRequest(funcInfo)) FlagEmergencyStop = true;
-        return funcInfo.ReturnValue.GetDataBool();
+        funcInfo.funcName = "ObjectMove1";
+        funcInfo.parameter[0].setData(chart_id);
+        funcInfo.parameter[1].setData(object_name);
+        funcInfo.parameter[2].setData(point_index);
+        funcInfo.parameter[3].setData(time);
+        funcInfo.parameter[4].setData(price);
+        if (!SendReceiveRequest(funcInfo)) flagEmergencyStop = true;
+        return funcInfo.returnValue.getDataBool();
     }
     public boolean ObjectMove(String name, int point_index, LocalDateTime time1, double price1)
     {
         FuncInfo funcInfo = new FuncInfo();
-        funcInfo.FuncName = "ObjectMove2";
-        funcInfo.Parameter[0].SetData(name);
-        funcInfo.Parameter[1].SetData(point_index);
-        funcInfo.Parameter[2].SetData(time1);
-        funcInfo.Parameter[3].SetData(price1);
-        if (!SendReceiveRequest(funcInfo)) FlagEmergencyStop = true;
-        return funcInfo.ReturnValue.GetDataBool();
+        funcInfo.funcName = "ObjectMove2";
+        funcInfo.parameter[0].setData(name);
+        funcInfo.parameter[1].setData(point_index);
+        funcInfo.parameter[2].setData(time1);
+        funcInfo.parameter[3].setData(price1);
+        if (!SendReceiveRequest(funcInfo)) flagEmergencyStop = true;
+        return funcInfo.returnValue.getDataBool();
     }
     public int ObjectsTotal(long chart_id, int sub_window, int type)
     {
         FuncInfo funcInfo = new FuncInfo();
-        funcInfo.FuncName = "ObjectsTotal1";
-        funcInfo.Parameter[0].SetData(chart_id);
-        funcInfo.Parameter[1].SetData(sub_window);
-        funcInfo.Parameter[2].SetData(type);
-        if (!SendReceiveRequest(funcInfo)) FlagEmergencyStop = true;
-        return funcInfo.ReturnValue.GetDataInt();
+        funcInfo.funcName = "ObjectsTotal1";
+        funcInfo.parameter[0].setData(chart_id);
+        funcInfo.parameter[1].setData(sub_window);
+        funcInfo.parameter[2].setData(type);
+        if (!SendReceiveRequest(funcInfo)) flagEmergencyStop = true;
+        return funcInfo.returnValue.getDataInt();
     }
     public int ObjectsTotal(long chart_id)
     {
         FuncInfo funcInfo = new FuncInfo();
-        funcInfo.FuncName = "ObjectsTotal1";
-        funcInfo.Parameter[0].SetData(chart_id);
-        funcInfo.Parameter[1].SetData(-1);
-        funcInfo.Parameter[2].SetData(-1);
-        if (!SendReceiveRequest(funcInfo)) FlagEmergencyStop = true;
-        return funcInfo.ReturnValue.GetDataInt();
+        funcInfo.funcName = "ObjectsTotal1";
+        funcInfo.parameter[0].setData(chart_id);
+        funcInfo.parameter[1].setData(-1);
+        funcInfo.parameter[2].setData(-1);
+        if (!SendReceiveRequest(funcInfo)) flagEmergencyStop = true;
+        return funcInfo.returnValue.getDataInt();
     }
     public int ObjectsTotal(long chart_id, int sub_window)
     {
         FuncInfo funcInfo = new FuncInfo();
-        funcInfo.FuncName = "ObjectsTotal1";
-        funcInfo.Parameter[0].SetData(chart_id);
-        funcInfo.Parameter[1].SetData(sub_window);
-        funcInfo.Parameter[2].SetData(-1);
-        if (!SendReceiveRequest(funcInfo)) FlagEmergencyStop = true;
-        return funcInfo.ReturnValue.GetDataInt();
+        funcInfo.funcName = "ObjectsTotal1";
+        funcInfo.parameter[0].setData(chart_id);
+        funcInfo.parameter[1].setData(sub_window);
+        funcInfo.parameter[2].setData(-1);
+        if (!SendReceiveRequest(funcInfo)) flagEmergencyStop = true;
+        return funcInfo.returnValue.getDataInt();
     }
     public int ObjectsTotal(int type)
     {
         FuncInfo funcInfo = new FuncInfo();
-        funcInfo.FuncName = "ObjectsTotal2";
-        funcInfo.Parameter[0].SetData(type);
-        if (!SendReceiveRequest(funcInfo)) FlagEmergencyStop = true;
-        return funcInfo.ReturnValue.GetDataInt();
+        funcInfo.funcName = "ObjectsTotal2";
+        funcInfo.parameter[0].setData(type);
+        if (!SendReceiveRequest(funcInfo)) flagEmergencyStop = true;
+        return funcInfo.returnValue.getDataInt();
     }
     public int ObjectsTotal()
     {
         FuncInfo funcInfo = new FuncInfo();
-        funcInfo.FuncName = "ObjectsTotal2";
-        funcInfo.Parameter[0].SetData(ObjectInfo.ObjectType.EMPTY);
-        if (!SendReceiveRequest(funcInfo)) FlagEmergencyStop = true;
-        return funcInfo.ReturnValue.GetDataInt();
+        funcInfo.funcName = "ObjectsTotal2";
+        funcInfo.parameter[0].setData(ObjectInfo.ObjectType.EMPTY);
+        if (!SendReceiveRequest(funcInfo)) flagEmergencyStop = true;
+        return funcInfo.returnValue.getDataInt();
     }
     public long ObjectGetInteger(long chart_id, String object_name, int prop_id, int prop_modifier)
     {
         FuncInfo funcInfo = new FuncInfo();
-        funcInfo.FuncName = "ObjectGetInteger1";
-        funcInfo.Parameter[0].SetData(chart_id);
-        funcInfo.Parameter[1].SetData(object_name);
-        funcInfo.Parameter[2].SetData(prop_id);
-        funcInfo.Parameter[3].SetData(prop_modifier);
-        if (!SendReceiveRequest(funcInfo)) FlagEmergencyStop = true;
-        LastError = funcInfo.ErrorCode;
-        return funcInfo.ReturnValue.GetDataLong();
+        funcInfo.funcName = "ObjectGetInteger1";
+        funcInfo.parameter[0].setData(chart_id);
+        funcInfo.parameter[1].setData(object_name);
+        funcInfo.parameter[2].setData(prop_id);
+        funcInfo.parameter[3].setData(prop_modifier);
+        if (!SendReceiveRequest(funcInfo)) flagEmergencyStop = true;
+        LastError = funcInfo.errorCode;
+        return funcInfo.returnValue.getDataLong();
     }
     public double ObjectGetDouble(long chart_id, String object_name, int prop_id, int prop_modifier)
     {
         FuncInfo funcInfo = new FuncInfo();
-        funcInfo.FuncName = "ObjectGetDouble1";
-        funcInfo.Parameter[0].SetData(chart_id);
-        funcInfo.Parameter[1].SetData(object_name);
-        funcInfo.Parameter[2].SetData(prop_id);
-        funcInfo.Parameter[3].SetData(prop_modifier);
-        if (!SendReceiveRequest(funcInfo)) FlagEmergencyStop = true;
-        LastError = funcInfo.ErrorCode;
-        return funcInfo.ReturnValue.GetDataDouble();
+        funcInfo.funcName = "ObjectGetDouble1";
+        funcInfo.parameter[0].setData(chart_id);
+        funcInfo.parameter[1].setData(object_name);
+        funcInfo.parameter[2].setData(prop_id);
+        funcInfo.parameter[3].setData(prop_modifier);
+        if (!SendReceiveRequest(funcInfo)) flagEmergencyStop = true;
+        LastError = funcInfo.errorCode;
+        return funcInfo.returnValue.getDataDouble();
     }
     public String ObjectGetString(long chart_id, String object_name, int prop_id, int prop_modifier)
     {
         FuncInfo funcInfo = new FuncInfo();
-        funcInfo.FuncName = "ObjectGetString1";
-        funcInfo.Parameter[0].SetData(chart_id);
-        funcInfo.Parameter[1].SetData(object_name);
-        funcInfo.Parameter[2].SetData(prop_id);
-        funcInfo.Parameter[3].SetData(prop_modifier);
-        if (!SendReceiveRequest(funcInfo)) FlagEmergencyStop = true;
-        LastError = funcInfo.ErrorCode;
-        return funcInfo.ReturnValue.GetDataString();
+        funcInfo.funcName = "ObjectGetString1";
+        funcInfo.parameter[0].setData(chart_id);
+        funcInfo.parameter[1].setData(object_name);
+        funcInfo.parameter[2].setData(prop_id);
+        funcInfo.parameter[3].setData(prop_modifier);
+        if (!SendReceiveRequest(funcInfo)) flagEmergencyStop = true;
+        LastError = funcInfo.errorCode;
+        return funcInfo.returnValue.getDataString();
     }        
     public boolean ObjectSetInteger(long chart_id, String object_name, int prop_id, long prop_value)
     {
         FuncInfo funcInfo = new FuncInfo();
-        funcInfo.FuncName = "ObjectSetInteger1";
-        funcInfo.Parameter[0].SetData(chart_id);
-        funcInfo.Parameter[1].SetData(object_name);
-        funcInfo.Parameter[2].SetData(prop_id);
-        funcInfo.Parameter[3].SetData(prop_value);
-        if (!SendReceiveRequest(funcInfo)) FlagEmergencyStop = true;
-        LastError = funcInfo.ErrorCode;
-        return funcInfo.ReturnValue.GetDataBool();
+        funcInfo.funcName = "ObjectSetInteger1";
+        funcInfo.parameter[0].setData(chart_id);
+        funcInfo.parameter[1].setData(object_name);
+        funcInfo.parameter[2].setData(prop_id);
+        funcInfo.parameter[3].setData(prop_value);
+        if (!SendReceiveRequest(funcInfo)) flagEmergencyStop = true;
+        LastError = funcInfo.errorCode;
+        return funcInfo.returnValue.getDataBool();
     }
     public boolean ObjectSetDouble(long chart_id, String object_name, int prop_id, double prop_value)
     {
         FuncInfo funcInfo = new FuncInfo();
-        funcInfo.FuncName = "ObjectSetDouble";
-        funcInfo.Parameter[0].SetData(chart_id);
-        funcInfo.Parameter[1].SetData(object_name);
-        funcInfo.Parameter[2].SetData(prop_id);
-        funcInfo.Parameter[3].SetData(prop_value);
-        if (!SendReceiveRequest(funcInfo)) FlagEmergencyStop = true;
-        LastError = funcInfo.ErrorCode;
-        return funcInfo.ReturnValue.GetDataBool();
+        funcInfo.funcName = "ObjectSetDouble";
+        funcInfo.parameter[0].setData(chart_id);
+        funcInfo.parameter[1].setData(object_name);
+        funcInfo.parameter[2].setData(prop_id);
+        funcInfo.parameter[3].setData(prop_value);
+        if (!SendReceiveRequest(funcInfo)) flagEmergencyStop = true;
+        LastError = funcInfo.errorCode;
+        return funcInfo.returnValue.getDataBool();
     }
     public boolean ObjectSetString(long chart_id, String object_name, int prop_id, String prop_value)
     {
         FuncInfo funcInfo = new FuncInfo();
-        funcInfo.FuncName = "ObjectSetString";
-        funcInfo.Parameter[0].SetData(chart_id);
-        funcInfo.Parameter[1].SetData(object_name);
-        funcInfo.Parameter[2].SetData(prop_id);
-        funcInfo.Parameter[3].SetData(prop_value);
-        if (!SendReceiveRequest(funcInfo)) FlagEmergencyStop = true;
-        LastError = funcInfo.ErrorCode;
-        return funcInfo.ReturnValue.GetDataBool();
+        funcInfo.funcName = "ObjectSetString";
+        funcInfo.parameter[0].setData(chart_id);
+        funcInfo.parameter[1].setData(object_name);
+        funcInfo.parameter[2].setData(prop_id);
+        funcInfo.parameter[3].setData(prop_value);
+        if (!SendReceiveRequest(funcInfo)) flagEmergencyStop = true;
+        LastError = funcInfo.errorCode;
+        return funcInfo.returnValue.getDataBool();
     }
     public boolean TextSetFont(String name, int size, int flags, int orientation)
     {
         FuncInfo funcInfo = new FuncInfo();
-        funcInfo.FuncName = "TextSetFont";
-        funcInfo.Parameter[0].SetData(name);
-        funcInfo.Parameter[1].SetData(size);
-        funcInfo.Parameter[2].SetData(flags);
-        funcInfo.Parameter[3].SetData(orientation);
-        if (!SendReceiveRequest(funcInfo)) FlagEmergencyStop = true;
-        LastError = funcInfo.ErrorCode;
-        return funcInfo.ReturnValue.GetDataBool();
+        funcInfo.funcName = "TextSetFont";
+        funcInfo.parameter[0].setData(name);
+        funcInfo.parameter[1].setData(size);
+        funcInfo.parameter[2].setData(flags);
+        funcInfo.parameter[3].setData(orientation);
+        if (!SendReceiveRequest(funcInfo)) flagEmergencyStop = true;
+        LastError = funcInfo.errorCode;
+        return funcInfo.returnValue.getDataBool();
     }
     //  イベント操作
     public boolean EventSetMillisecondTimer(int milliseconds)
     {
         FuncInfo funcInfo = new FuncInfo();
-        funcInfo.FuncName = "EventSetMillisecondTimer";
-        funcInfo.Parameter[0].SetData(milliseconds);
-        if (!SendReceiveRequest(funcInfo)) FlagEmergencyStop = true;
-        LastError = funcInfo.ErrorCode;
-        return funcInfo.ReturnValue.GetDataBool();
+        funcInfo.funcName = "EventSetMillisecondTimer";
+        funcInfo.parameter[0].setData(milliseconds);
+        if (!SendReceiveRequest(funcInfo)) flagEmergencyStop = true;
+        LastError = funcInfo.errorCode;
+        return funcInfo.returnValue.getDataBool();
     }
     public boolean EventSetTimer(int seconds)
     {
         FuncInfo funcInfo = new FuncInfo();
-        funcInfo.FuncName = "EventSetTimer";
-        funcInfo.Parameter[0].SetData(seconds);
-        if (!SendReceiveRequest(funcInfo)) FlagEmergencyStop = true;
-        LastError = funcInfo.ErrorCode;
-        return funcInfo.ReturnValue.GetDataBool();
+        funcInfo.funcName = "EventSetTimer";
+        funcInfo.parameter[0].setData(seconds);
+        if (!SendReceiveRequest(funcInfo)) flagEmergencyStop = true;
+        LastError = funcInfo.errorCode;
+        return funcInfo.returnValue.getDataBool();
     }
     public void EventKillTimer()
     {
         FuncInfo funcInfo = new FuncInfo();
-        funcInfo.FuncName = "EventKillTimer";
-        if (!SendReceiveRequest(funcInfo)) FlagEmergencyStop = true;
-        return;
+        funcInfo.funcName = "EventKillTimer";
+        if (!SendReceiveRequest(funcInfo)) flagEmergencyStop = true;
     }
     public boolean EventChartCustom(long chart_id, short custom_event_id, long lparam, double dparam, String sparam)
     {
         FuncInfo funcInfo = new FuncInfo();
-        funcInfo.FuncName = "EventChartCustom";
-        funcInfo.Parameter[0].SetData(chart_id);
-        funcInfo.Parameter[1].SetData(custom_event_id);
-        funcInfo.Parameter[2].SetData(lparam);
-        funcInfo.Parameter[3].SetData(dparam);
-        funcInfo.Parameter[4].SetData(sparam);
-        if (!SendReceiveRequest(funcInfo)) FlagEmergencyStop = true;
-        LastError = funcInfo.ErrorCode;
-        return funcInfo.ReturnValue.GetDataBool();
+        funcInfo.funcName = "EventChartCustom";
+        funcInfo.parameter[0].setData(chart_id);
+        funcInfo.parameter[1].setData(custom_event_id);
+        funcInfo.parameter[2].setData(lparam);
+        funcInfo.parameter[3].setData(dparam);
+        funcInfo.parameter[4].setData(sparam);
+        if (!SendReceiveRequest(funcInfo)) flagEmergencyStop = true;
+        LastError = funcInfo.errorCode;
+        return funcInfo.returnValue.getDataBool();
     }
     public void ExpertRemove()
     {
         FuncInfo funcInfo = new FuncInfo();
-        funcInfo.FuncName = "ExpertRemove";
-        if (!SendReceiveRequest(funcInfo)) FlagEmergencyStop = true;
-        return;
+        funcInfo.funcName = "ExpertRemove";
+        if (!SendReceiveRequest(funcInfo)) flagEmergencyStop = true;
     }
     //  MT4の関数はここまで
     
@@ -1740,54 +1736,52 @@ public abstract class Connector
     //  サーバー側と違いこの関数が呼び出せるのはグローバル関数のみ
     public void CallFunc(FuncInfo funcInfo)
     {
-        if (MT4StringCompare(funcInfo.FuncName, "OnPreInit"))
+        if (MT4StringCompare(funcInfo.funcName, "OnPreInit"))
         {
-            boolean debug = funcInfo.Parameter[0].GetDataDouble() != 0 ? true : false;
+            boolean debug = funcInfo.parameter[0].getDataDouble() != 0 ? true : false;
             OnPreInit(debug);
         }
         else
         {
-            Ask = funcInfo.Parameter[0].GetDataDouble();
-            Bid = funcInfo.Parameter[1].GetDataDouble();
-            Volume = funcInfo.Parameter[7].GetDataLong();
-            Bars = funcInfo.Parameter[8].GetDataInt();
-            Digits = funcInfo.Parameter[9].GetDataInt();
-            Point = funcInfo.Parameter[10].GetDataInt();
+            Ask = funcInfo.parameter[0].getDataDouble();
+            Bid = funcInfo.parameter[1].getDataDouble();
+            Volume = funcInfo.parameter[7].getDataLong();
+            Bars = funcInfo.parameter[8].getDataInt();
+            Digits = funcInfo.parameter[9].getDataInt();
+            Point = funcInfo.parameter[10].getDataInt();
 
-            if (MT4StringCompare(funcInfo.FuncName, "OnInit"))
+            if (MT4StringCompare(funcInfo.funcName, "OnInit"))
             {
-                funcInfo.ReturnValue.SetData(
+                funcInfo.returnValue.setData(
                     OnInit()
                 );
             }
-            else if (MT4StringCompare(funcInfo.FuncName, "OnTick"))
+            else if (MT4StringCompare(funcInfo.funcName, "OnTick"))
             {
                 OnTick();
             }
-            else if (MT4StringCompare(funcInfo.FuncName, "OnTimer"))
+            else if (MT4StringCompare(funcInfo.funcName, "OnTimer"))
             {
                 OnTimer();
             }
-            else if (MT4StringCompare(funcInfo.FuncName, "OnDeinit"))
+            else if (MT4StringCompare(funcInfo.funcName, "OnDeinit"))
             {
-                OnDeinit(funcInfo.Parameter[0].GetDataInt());
+                OnDeinit(funcInfo.parameter[0].getDataInt());
             }
-            else if (MT4StringCompare(funcInfo.FuncName, "OnTimerInternal"))
+            else if (MT4StringCompare(funcInfo.funcName, "OnTimerInternal"))
             {
                 OnTimerInternal();
             }
             else
             {
-                System.err.printf("不明な関数が呼び出されました'%s'。\n", funcInfo.FuncName);
+                System.err.printf("不明な関数が呼び出されました'%s'。\n", funcInfo.funcName);
             }            
         }        
-        return;
     }
     
     public void CallExpertRemove()
     {
         //  クライアント側なので何もしない。ソース共通化のため残している
-        return;
     }
     
     boolean MT4StringCompare(String a, String b)
@@ -1798,30 +1792,30 @@ public abstract class Connector
     //  リクエスト情報の送受信
     public boolean SendReceiveRequest(FuncInfo funcInfo)
     {
-        PrintDebugMessage("SendReceiveRequestが呼ばれました。");
+        printDebugMessage("SendReceiveRequestが呼ばれました。");
         int PosParameter = 0;
         int PosAuxiliary = 0;
         Message s = new Message();
         Message r = new Message();
         FuncInfo funcInfoReceived = new FuncInfo();
         
-        if (funcInfo.FuncName != null)
+        if (funcInfo.funcName != null)
         {
             //  呼び出す関数が決まっている
-            s.SetMessageType(Message.MSG_REQUEST_CALL_FUNCTION);
-            s.Data[1].SetData(funcInfo.FuncName);
+            s.setMessageType(Message.MSG_REQUEST_CALL_FUNCTION);
+            s.getDataGram()[1].setData(funcInfo.funcName);
         }
         else
         {
             //  呼び出す関数が決まっていない（最初だけ何も要求を送らない）
-            s.SetMessageType(Message.MSG_NOP);
+            s.setMessageType(Message.MSG_NOP);
         }
         
         do
         {
-            PrintDebugMessage("リクエスト情報を送受信するためのループ");
-            s.SetEmergencyStop(FlagEmergencyStop ? (char)1 : (char)0);
-            if (!Pipe.SendMessage(s))
+            printDebugMessage("リクエスト情報を送受信するためのループ");
+            s.setEmergencyStop(flagEmergencyStop ? (char)1 : (char)0);
+            if (!pipe.SendMessage(s))
             {
                 System.err.println("メッセージの送信に失敗しました");
                 s = null;
@@ -1829,11 +1823,11 @@ public abstract class Connector
                 funcInfoReceived = null;
                 return false;
             }
-            PrintDebugMessage(String.format("メッセージを送信しました。メッセージタイプは%X", s.GetMessageType()));
+            printDebugMessage(String.format("メッセージを送信しました。メッセージタイプは%X", s.getMessageType()));
             
-            if (funcInfoReceived.FuncName != null && 
-                MT4StringCompare(funcInfoReceived.FuncName, "OnDeinit") && 
-                s.GetMessageType() == Message.MSG_AUXILIARY_END)
+            if (funcInfoReceived.funcName != null && 
+                MT4StringCompare(funcInfoReceived.funcName, "OnDeinit") && 
+                s.getMessageType() == Message.MSG_AUXILIARY_END)
             {
                  //  OnDeinitの呼び出し依頼、かつ補助情報の送信が終わった場合
                  break;   //  この関数の無限ループを抜ける
@@ -1841,8 +1835,8 @@ public abstract class Connector
 
             //  ----  ここまでで関数呼び出し依頼は完了している  ----
             
-            r.Clear();
-            if (!Pipe.ReceiveMessage(r))
+            r.clear();
+            if (!pipe.ReceiveMessage(r))
             {
                 System.err.println("メッセージの受信に失敗しました");
                 s = null;
@@ -1850,9 +1844,9 @@ public abstract class Connector
                 funcInfoReceived = null;
                 return false;
             }
-            PrintDebugMessage(String.format("メッセージを受信しました。メッセージタイプは%X", r.GetMessageType()));            
+            printDebugMessage(String.format("メッセージを受信しました。メッセージタイプは%X", r.getMessageType()));
             
-            if (r.GetMessageType()==Message.MSG_NULL)
+            if (r.getMessageType()==Message.MSG_NULL)
             {
                 System.err.println("空のメッセージを受信しました。緊急停止します");
                 s = null;
@@ -1862,120 +1856,120 @@ public abstract class Connector
             }
             
             //  緊急終了フラグの確認
-            if(r.GetEmergencyStop()!=0)
+            if(r.getEmergencyStop()!=0)
             {
                 CallExpertRemove();
             }
             
             //  先方からのメッセージを処理する
-            switch (r.GetMessageType())
+            switch (r.getMessageType())
             {
                 //   関数呼び出しの結果
                 //  関数呼び出し依頼をした場合
                 case Message.MSG_REQUEST_PARAMETER:
                 {
-                    PrintDebugMessage("MSG_REQUEST_PARAMETERを受信しました");
-                    s.Clear();
-                    s.SetMessageType(Message.MSG_PARAMETER);
-                    funcInfo.Parameter[PosParameter].CopyDataGramTo(s.Data[1]);
-                    if (PosParameter >= funcInfo.GetNumberOfParameters())
+                    printDebugMessage("MSG_REQUEST_PARAMETERを受信しました");
+                    s.clear();
+                    s.setMessageType(Message.MSG_PARAMETER);
+                    funcInfo.parameter[PosParameter].copyDataGramTo(s.getDataGram()[1]);
+                    if (PosParameter >= funcInfo.getNumberOfParameters())
                     {
-                        s.SetMessageType(Message.MSG_PARAMETER_END);
+                        s.setMessageType(Message.MSG_PARAMETER_END);
                     }
                     PosParameter++;
                     break;
                 }
                 case Message.MSG_RETURN_VALUE:
                 {
-                    PrintDebugMessage("MSG_RETURN_VALUEを受信しました");
-                    s.Clear();
-                    s.SetMessageType(Message.MSG_REQUEST_ERROR_CODE);
-                    r.Data[1].CopyDataGramTo(funcInfo.ReturnValue);
-                    break;            
+                    printDebugMessage("MSG_RETURN_VALUEを受信しました");
+                    s.clear();
+                    s.setMessageType(Message.MSG_REQUEST_ERROR_CODE);
+                    r.getDataGram()[1].copyDataGramTo(funcInfo.returnValue);
+                    break;
                 }
                 case Message.MSG_ERROR_CODE:
                 {
-                    PrintDebugMessage("MSG_ERROR_CODEを受信しました");
-                    s.Clear();
-                    s.SetMessageType(Message.MSG_REQUEST_AUXILIARY);
-                    funcInfo.ErrorCode = r.Data[1].GetDataInt();
+                    printDebugMessage("MSG_ERROR_CODEを受信しました");
+                    s.clear();
+                    s.setMessageType(Message.MSG_REQUEST_AUXILIARY);
+                    funcInfo.errorCode = r.getDataGram()[1].getDataInt();
                     PosAuxiliary = 0;
-                    break;            
+                    break;
                 }
                 case Message.MSG_AUXILIARY:
                 case Message.MSG_AUXILIARY_END:
                 {
-                    PrintDebugMessage("MSG_AUXILIARYまたはMSG_AUXILIARY_ENDを受信しました");
-                    s.Clear();
-                    s.SetMessageType(Message.MSG_REQUEST_AUXILIARY);
-                    r.Data[1].CopyDataGramTo(funcInfo.Auxiliary[PosAuxiliary]);
+                    printDebugMessage("MSG_AUXILIARYまたはMSG_AUXILIARY_ENDを受信しました");
+                    s.clear();
+                    s.setMessageType(Message.MSG_REQUEST_AUXILIARY);
+                    r.getDataGram()[1].copyDataGramTo(funcInfo.auxiliary[PosAuxiliary]);
                     PosAuxiliary++;
-                    break;            
-                }                
+                    break;
+                }
                 //  関数呼び出し依頼
                 case Message.MSG_REQUEST_CALL_FUNCTION:
                 {
-                    PrintDebugMessage("MSG_CALL_FUNCTIONを受信しました");
-                    s.Clear();
-                    s.SetMessageType(Message.MSG_REQUEST_PARAMETER);
-                    funcInfoReceived.Clear();
-                    funcInfoReceived.FuncName = r.Data[1].GetDataString();
+                    printDebugMessage("MSG_CALL_FUNCTIONを受信しました");
+                    s.clear();
+                    s.setMessageType(Message.MSG_REQUEST_PARAMETER);
+                    funcInfoReceived.clear();
+                    funcInfoReceived.funcName = r.getDataGram()[1].getDataString();
                     PosParameter = 0;
                     break;
                 }
                 case Message.MSG_PARAMETER:
                 {
-                    PrintDebugMessage("MSG_PARAMETERを受信しました");
-                    s.Clear();
-                    s.SetMessageType(Message.MSG_REQUEST_PARAMETER);
-                    r.Data[1].CopyDataGramTo(funcInfoReceived.Parameter[PosParameter]);
+                    printDebugMessage("MSG_PARAMETERを受信しました");
+                    s.clear();
+                    s.setMessageType(Message.MSG_REQUEST_PARAMETER);
+                    r.getDataGram()[1].copyDataGramTo(funcInfoReceived.parameter[PosParameter]);
                     PosParameter++;
                     break;
                 }
                 case Message.MSG_PARAMETER_END:
                 {
-                    PrintDebugMessage("MSG_PARAMETER_ENDを受信しました");
-                    r.Data[1].CopyDataGramTo(funcInfoReceived.Parameter[PosParameter]);
+                    printDebugMessage("MSG_PARAMETER_ENDを受信しました");
+                    r.getDataGram()[1].copyDataGramTo(funcInfoReceived.parameter[PosParameter]);
                     PosParameter++;
-
+                    
                     //  関数実行
                     CallFunc(funcInfoReceived);
-
+                    
                     //  関数呼び出し後
-                    s.Clear();
-                    s.SetMessageType(Message.MSG_RETURN_VALUE);
-                    funcInfoReceived.ReturnValue.CopyDataGramTo(s.Data[1]);
+                    s.clear();
+                    s.setMessageType(Message.MSG_RETURN_VALUE);
+                    funcInfoReceived.returnValue.copyDataGramTo(s.getDataGram()[1]);
                     break;
                 }
                 case Message.MSG_REQUEST_ERROR_CODE:
                 {
-                    PrintDebugMessage("MSG_REQUEST_ERROR_CODEを受信しました");
-                    s.Clear();
-                    s.SetMessageType(Message.MSG_ERROR_CODE);
-                    s.Data[1].SetData(funcInfoReceived.ErrorCode);
+                    printDebugMessage("MSG_REQUEST_ERROR_CODEを受信しました");
+                    s.clear();
+                    s.setMessageType(Message.MSG_ERROR_CODE);
+                    s.getDataGram()[1].setData(funcInfoReceived.errorCode);
                     break;
                 }
                 case Message.MSG_REQUEST_AUXILIARY:
                 {
-                    PrintDebugMessage("MSG_REQUEST_AUXILIARYを受信しました");
-                    s.Clear();
-                    s.SetMessageType(Message.MSG_AUXILIARY);
-                    funcInfoReceived.Auxiliary[PosAuxiliary].CopyDataGramTo(s.Data[1]);
-                    if (PosAuxiliary >= funcInfoReceived.GetNumberOfAuxiliaries())
+                    printDebugMessage("MSG_REQUEST_AUXILIARYを受信しました");
+                    s.clear();
+                    s.setMessageType(Message.MSG_AUXILIARY);
+                    funcInfoReceived.auxiliary[PosAuxiliary].copyDataGramTo(s.getDataGram()[1]);
+                    if (PosAuxiliary >= funcInfoReceived.getNumberOfAuxiliaries())
                     {
-                        s.SetMessageType(Message.MSG_AUXILIARY_END);
+                        s.setMessageType(Message.MSG_AUXILIARY_END);
                     }
                     PosAuxiliary++;
                     break;
                 }
             }
         }
-        while (r.GetMessageType()!=Message.MSG_AUXILIARY_END);
+        while (r.getMessageType()!=Message.MSG_AUXILIARY_END);
         
         s = null;
         r = null;
         funcInfoReceived = null;
-        PrintDebugMessage("リクエスト情報の送受信を行いました。");
+        printDebugMessage("リクエスト情報の送受信を行いました。");
         return true;
     }
     
@@ -1988,34 +1982,26 @@ public abstract class Connector
             System.out.println("Ctrl+Cが押されました。サーバにOnDeinitの呼出依頼を発行します。");
             try
             {
-                synchronized (Pipe)
+                synchronized (pipe)
                 {
-                    FlagEmergencyStop = true;
-                    Pipe.wait();
+                    flagEmergencyStop = true;
+                    pipe.wait();
                 }
             }
             catch (InterruptedException e)
             {
                 e.printStackTrace();
             }
-            return;
         }
     };
-    
-    //  コンストラクタ
-    public Connector()
-    {
-        Pipe = new PipeClient();
-        return;
-    }
     
     //  サーバーへの接続を行う
     public final void ConnectToMT4(String PipeName)
     {
-        PrintDebugMessage("サーバへ接続します。");
+        printDebugMessage("サーバへ接続します。");
         try
         {
-            Pipe.ConnectToServer(PipeName);
+            pipe.ConnectToServer(PipeName);
 
         }
         catch (FileNotFoundException e)
@@ -2025,15 +2011,15 @@ public abstract class Connector
         }
         Runtime.getRuntime().addShutdownHook(shutdownSequence1);
         FuncInfo fi = new FuncInfo();
-        fi.FuncName = null;
+        fi.funcName = null;
         SendReceiveRequest(fi);
-        PrintDebugMessage("リクエストの送受信がすべて終わりました。プログラムを終了します。");
+        printDebugMessage("リクエストの送受信がすべて終わりました。プログラムを終了します。");
         
         try
         {
-            synchronized (Pipe)
+            synchronized (pipe)
             {
-                Pipe.notify();
+                pipe.notify();
                 Runtime.getRuntime().removeShutdownHook(shutdownSequence1);            
             }
         }
@@ -2042,8 +2028,7 @@ public abstract class Connector
             //  シャットダウン中だった場合。特に何もしない
         }
         
-        PrintDebugMessage("サーバーとの接続を切断します。");
-        Pipe.Close();
-        return;
+        printDebugMessage("サーバーとの接続を切断します。");
+        pipe.Close();
     }
 }

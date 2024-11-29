@@ -17,62 +17,60 @@ public class Message
     public static final char MSG_AUXILIARY_END         = (char)0x2C;
     
     static final int NUMBER_OF_DATAGRAMS = 2; //  1メッセージあたりのデータグラムの数
-    public DataGram[] Data = new DataGram[NUMBER_OF_DATAGRAMS];
+    private DataGram[] data = new DataGram[NUMBER_OF_DATAGRAMS];
+    public DataGram[] getDataGram()
+    {
+        return data;
+    }
     
     //  コンストラクタ
     public Message()
     {
         for (int i = 0; i < NUMBER_OF_DATAGRAMS; i++)
         {
-            Data[i] = new DataGram();
+            data[i] = new DataGram();
         }
-        Clear();
-        return;
+        clear();
     }
-    public void Clear()
+    public void clear()
     {
         for (int i = 0; i < NUMBER_OF_DATAGRAMS; i++)
         {
-            Data[i].Clear();
+            data[i].clear();
         }
-        return;
     }
-    public void DumpAll()
+    public void dumpAll()
     {
         for (int i = 0; i < NUMBER_OF_DATAGRAMS; i++)
         {
-            Data[i].DumpMessage();
+            data[i].dumpMessage();
         }
-        return;
     }   
-    public void SetMessageType(char mt)
+    public void setMessageType(char mt)
     {
-        Data[0].Buffer[DataGram.BUFFER_SIZE - 1] = '\0';
-        Data[0].Buffer[0] = mt;
-        return;
+        data[0].buffer[DataGram.BUFFER_SIZE - 1] = '\0';
+        data[0].buffer[0] = mt;
     }
-    public void SetEmergencyStop(char flg)
+    public void setEmergencyStop(char flg)
     {
-        Data[0].Buffer[DataGram.BUFFER_SIZE - 1] = '\0';
-        Data[0].Buffer[1] = flg;
-        return;
+        data[0].buffer[DataGram.BUFFER_SIZE - 1] = '\0';
+        data[0].buffer[1] = flg;
     }
-    public void SetSequenceNumber(char num)
+    public void setSequenceNumber(char num)
     {
-        Data[0].Buffer[DataGram.BUFFER_SIZE - 1] = '\0';
-        Data[0].Buffer[2] = num;
-        return;
+        data[0].buffer[DataGram.BUFFER_SIZE - 1] = '\0';
+        data[0].buffer[2] = num;
     }
-    public int GetMessageType()
+    public int getMessageType()
     {
-      return (int)Data[0].Buffer[0];
+        return (int)data[0].buffer[0];
     }
-    public int GetEmergencyStop()
+    public int getEmergencyStop()
     {
-      return (int)Data[0].Buffer[1];
+        return (int)data[0].buffer[1];
     }
-    public char GetSequenceNumber()
+    public char getSequenceNumber()
     {
-        return Data[0].Buffer[2];
+        return data[0].buffer[2];
     }
 }

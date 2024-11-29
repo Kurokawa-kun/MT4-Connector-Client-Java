@@ -19,7 +19,6 @@ public class MyApp1 extends MT4Connector.Connector
     {
         //  現在価格を表示する
         System.out.printf("%-10s: Bid:%-9s Ask:%-9s \n", Symbol(), String.format(format, Bid), String.format(format, Ask));
-        return;
     }
     @Override
     public void OnTimer()
@@ -33,13 +32,11 @@ public class MyApp1 extends MT4Connector.Connector
         }
         System.out.printf("チケット番号は'%d'。\n", t);
         ExpertRemove();   //  プログラムの終了
-        return;
     }
     @Override
     public void OnDeinit(final int reason)
     {
         //  特に何もしない
-        return;
     }
     //  メイン
     public static void main(String[] args)
@@ -55,6 +52,5 @@ public class MyApp1 extends MT4Connector.Connector
         String PipeName = args[1];
         new MyApp1().ConnectToMT4(PipeName);
         System.out.println("MyApp1(Java版)を終了します。");
-        return;
     }
 }

@@ -11,18 +11,17 @@ public class DataGram
     static final char CHAR_NULL = 0x00;
     static final char CHAR_INITIALIZED = 0x1A;    
     
-    protected char[] Buffer;   //  メッセージバッファ本文
+    protected char[] buffer;   //  メッセージバッファ本文
     
     //  コンストラクタ
     public DataGram()
     {
-        Buffer = new char[BUFFER_SIZE];
-        Clear();
-        return;
+        buffer = new char[BUFFER_SIZE];
+        clear();
     }
     
     //  データを16進数の文字列型で取得する
-    public String GetHexString(char v)
+    public String getHexString(char v)
     {
         char[] buf = new char[2];
         Arrays.fill(buf, CHAR_NULL);
@@ -123,229 +122,213 @@ public class DataGram
     }
     
     //  メッセージを画面に出力する（デバッグ目的）
-    public void DumpMessage()
+    public void dumpMessage()
     {
         for (int c=0; c<BUFFER_SIZE; c+=32)
         {
             System.out.printf("%s%s%s%s%s%s%s%s %s%s%s%s%s%s%s%s %s%s%s%s%s%s%s%s %s%s%s%s%s%s%s%s \n", 
-                GetHexString(Buffer[c + 0]), GetHexString(Buffer[c + 1]), GetHexString(Buffer[c + 2]), GetHexString(Buffer[c + 3]), 
-                GetHexString(Buffer[c + 4]), GetHexString(Buffer[c + 5]), GetHexString(Buffer[c + 6]), GetHexString(Buffer[c + 7]), 
-                GetHexString(Buffer[c + 8]), GetHexString(Buffer[c + 9]), GetHexString(Buffer[c + 10]), GetHexString(Buffer[c + 11]), 
-                GetHexString(Buffer[c + 12]), GetHexString(Buffer[c + 13]), GetHexString(Buffer[c + 14]), GetHexString(Buffer[c + 15]), 
-                GetHexString(Buffer[c + 16]), GetHexString(Buffer[c + 17]), GetHexString(Buffer[c + 18]), GetHexString(Buffer[c + 19]), 
-                GetHexString(Buffer[c + 20]), GetHexString(Buffer[c + 21]), GetHexString(Buffer[c + 22]), GetHexString(Buffer[c + 23]), 
-                GetHexString(Buffer[c + 24]), GetHexString(Buffer[c + 25]), GetHexString(Buffer[c + 26]), GetHexString(Buffer[c + 27]), 
-                GetHexString(Buffer[c + 28]), GetHexString(Buffer[c + 29]), GetHexString(Buffer[c + 30]), GetHexString(Buffer[c + 31])
+                getHexString(buffer[c + 0]), getHexString(buffer[c + 1]), getHexString(buffer[c + 2]), getHexString(buffer[c + 3]), 
+                getHexString(buffer[c + 4]), getHexString(buffer[c + 5]), getHexString(buffer[c + 6]), getHexString(buffer[c + 7]), 
+                getHexString(buffer[c + 8]), getHexString(buffer[c + 9]), getHexString(buffer[c + 10]), getHexString(buffer[c + 11]), 
+                getHexString(buffer[c + 12]), getHexString(buffer[c + 13]), getHexString(buffer[c + 14]), getHexString(buffer[c + 15]), 
+                getHexString(buffer[c + 16]), getHexString(buffer[c + 17]), getHexString(buffer[c + 18]), getHexString(buffer[c + 19]), 
+                getHexString(buffer[c + 20]), getHexString(buffer[c + 21]), getHexString(buffer[c + 22]), getHexString(buffer[c + 23]), 
+                getHexString(buffer[c + 24]), getHexString(buffer[c + 25]), getHexString(buffer[c + 26]), getHexString(buffer[c + 27]), 
+                getHexString(buffer[c + 28]), getHexString(buffer[c + 29]), getHexString(buffer[c + 30]), getHexString(buffer[c + 31])
             );
         }
-        return;
     }
     
     //  メッセージバッファのクリア
-    public void Clear()
+    public void clear()
     {
-        Arrays.fill(Buffer, CHAR_NULL);
-        Buffer[BUFFER_SIZE - 1] = CHAR_INITIALIZED;
-        return;
+        Arrays.fill(buffer, CHAR_NULL);
+        buffer[BUFFER_SIZE - 1] = CHAR_INITIALIZED;
     }
     
     //  データの設定
-    public void SetData(char v)
+    public void setData(char v)
     {
-        Buffer[BUFFER_SIZE - 1] = CHAR_NULL;
-        Buffer[0] = v;
-        return;
+        buffer[BUFFER_SIZE - 1] = CHAR_NULL;
+        buffer[0] = v;
     }
-    public void SetData(boolean v)
+    public void setData(boolean v)
     {
-        Buffer[BUFFER_SIZE - 1] = CHAR_NULL;
-        Buffer[0] = v ? (char)1 : (char)0;
-        return;
+        buffer[BUFFER_SIZE - 1] = CHAR_NULL;
+        buffer[0] = v ? (char)1 : (char)0;
     }
-    public void SetData(short v)
+    public void setData(short v)
     {
-        Buffer[BUFFER_SIZE - 1] = CHAR_NULL;
-        Buffer[0] = (char)((v >> 8) & 0xFF);
-        Buffer[1] = (char)(v & 0xFF);
-        return;
+        buffer[BUFFER_SIZE - 1] = CHAR_NULL;
+        buffer[0] = (char)((v >> 8) & 0xFF);
+        buffer[1] = (char)(v & 0xFF);
     }
-    public void SetData(int v)
+    public void setData(int v)
     {
-        Buffer[BUFFER_SIZE - 1] = CHAR_NULL;
-        Buffer[0] = (char)((v >> 24) & 0xFF);
-        Buffer[1] = (char)((v >> 16) & 0xFF);      
-        Buffer[2] = (char)((v >> 8) & 0xFF);
-        Buffer[3] = (char)(v & 0xFF);
-        return;
+        buffer[BUFFER_SIZE - 1] = CHAR_NULL;
+        buffer[0] = (char)((v >> 24) & 0xFF);
+        buffer[1] = (char)((v >> 16) & 0xFF);      
+        buffer[2] = (char)((v >> 8) & 0xFF);
+        buffer[3] = (char)(v & 0xFF);
     }
-    public void SetData(float v)
+    public void setData(float v)
     {
-        Buffer[BUFFER_SIZE - 1] = CHAR_NULL;
-        SetData(Float.floatToRawIntBits(v));
-        return;
+        buffer[BUFFER_SIZE - 1] = CHAR_NULL;
+        setData(Float.floatToRawIntBits(v));
     }
-    public void SetData(Color v)
+    public void setData(Color v)
     {
-        Buffer[BUFFER_SIZE - 1] = CHAR_NULL;
+        buffer[BUFFER_SIZE - 1] = CHAR_NULL;
         char a = (char)0;
         char r = (char)v.getRed();
         char g = (char)v.getGreen();
-        char b = (char)v.getBlue();
-        
-        SetData(a << 24 | b << 16 | g << 8 | r);
-        return;
+        char b = (char)v.getBlue();        
+        setData(a << 24 | b << 16 | g << 8 | r);
     }
-    public void SetData(long v)
+    public void setData(long v)
     {
-        Buffer[BUFFER_SIZE - 1] = CHAR_NULL;
-        Buffer[0] = (char)((v >> 56) & 0xFF);
-        Buffer[1] = (char)((v >> 48) & 0xFF);      
-        Buffer[2] = (char)((v >> 40) & 0xFF);
-        Buffer[3] = (char)((v >> 32) & 0xFF);
-        Buffer[4] = (char)((v >> 24) & 0xFF);
-        Buffer[5] = (char)((v >> 16) & 0xFF);      
-        Buffer[6] = (char)((v >> 8) & 0xFF);
-        Buffer[7] = (char)(v & 0xFF);
-        return;
+        buffer[BUFFER_SIZE - 1] = CHAR_NULL;
+        buffer[0] = (char)((v >> 56) & 0xFF);
+        buffer[1] = (char)((v >> 48) & 0xFF);      
+        buffer[2] = (char)((v >> 40) & 0xFF);
+        buffer[3] = (char)((v >> 32) & 0xFF);
+        buffer[4] = (char)((v >> 24) & 0xFF);
+        buffer[5] = (char)((v >> 16) & 0xFF);      
+        buffer[6] = (char)((v >> 8) & 0xFF);
+        buffer[7] = (char)(v & 0xFF);
     }
-    //public void SetData(ulong v)
+    //public void setData(ulong v)
     //{
-    //    SetData((long)v);
-    //    return;
+    //    setData((long)v);
     //}
-    public void SetData(double v)
+    public void setData(double v)
     {
-        Buffer[BUFFER_SIZE - 1] = CHAR_NULL;
-        SetData(Double.doubleToRawLongBits(v));
-        return;
+        buffer[BUFFER_SIZE - 1] = CHAR_NULL;
+        setData(Double.doubleToRawLongBits(v));
     }
-    public void SetData(LocalDateTime v)
+    public void setData(LocalDateTime v)
     {
         long l = v.toEpochSecond(ZoneOffset.UTC);
         System.out.printf("%d \n", l);
-        
-        SetData(l);
-        return;
+        setData(l);
     }
-    public void SetData(String v)
+    public void setData(String v)
     {
-        Arrays.fill(Buffer, CHAR_NULL);
+        Arrays.fill(buffer, CHAR_NULL);
         for (int c=0; c<Math.min(BUFFER_SIZE - 1, v.length()); c++)
         {
-            Buffer[c] = v.charAt(c); 
+            buffer[c] = v.charAt(c); 
         }
-        Buffer[BUFFER_SIZE - 1] = CHAR_NULL;
-        return;
+        buffer[BUFFER_SIZE - 1] = CHAR_NULL;
     }
     //  データの取得
-    public char GetDataChar()
+    public char getDataChar()
     {
-        return Buffer[0];
+        return buffer[0];
     }
-    //public uchar GetDataUChar()
+    //public uchar getDataUChar()
     //{
-    //    return (uchar)Buffer[0];
+    //    return (uchar)buffer[0];
     //}
-    public boolean GetDataBool()
+    public boolean getDataBool()
     {
-        return Buffer[0]==1;
+        return buffer[0]==1;
     }
-    public short GetDataShort()
+    public short getDataShort()
     {
         short v = 0;
-        v = (short)((Buffer[0] << 8) | Buffer[1]);
+        v = (short)((buffer[0] << 8) | buffer[1]);
         return v;
     }
-    //public ushort GetDataUShort()
+    //public ushort getDataUShort()
     //{
     //    return (ushort)GetDataShort();
     //    //return (ushort)(
-    //    //   (Buffer[0] << 8) | 
-    //    //   Buffer[1]
+    //    //   (buffer[0] << 8) | 
+    //    //   buffer[1]
     //    //);
     //}
-    public int GetDataInt()
+    public int getDataInt()
     {
         int i = 0;
         for (int v = 0; v < 4; v++)
         {
-            i |= ((int)Buffer[v] & 0xFF) << (8 * (3 - v));
+            i |= ((int)buffer[v] & 0xFF) << (8 * (3 - v));
         }
         return i;
     }
-    //public uint GetDataUInt()
+    //public uint getDataUInt()
     //{
     //    return (uint)GetDataInt();
     //    //return (uint)(
-    //    //   (Buffer[0] << 24) | 
-    //    //   (Buffer[1] << 16) | 
-    //    //   (Buffer[2] << 8) | 
-    //    //   Buffer[3]
+    //    //   (buffer[0] << 24) | 
+    //    //   (buffer[1] << 16) | 
+    //    //   (buffer[2] << 8) | 
+    //    //   buffer[3]
     //    //);
     //}
-    public float GetDataFloat()
+    public float getDataFloat()
     {
-        return Float.intBitsToFloat(GetDataInt());
+        return Float.intBitsToFloat(getDataInt());
     }
-    public Color GetDataColor()
+    public Color getDataColor()
     {
-        int red = Byte.toUnsignedInt((byte)Buffer[3]);
-        int green = Byte.toUnsignedInt((byte)Buffer[2]);
-        int blue = Byte.toUnsignedInt((byte)Buffer[1]);
-        int alpha = Byte.toUnsignedInt((byte)Buffer[0]);
+        int red = Byte.toUnsignedInt((byte)buffer[3]);
+        int green = Byte.toUnsignedInt((byte)buffer[2]);
+        int blue = Byte.toUnsignedInt((byte)buffer[1]);
+        int alpha = Byte.toUnsignedInt((byte)buffer[0]);
         Color rv = new Color(red, green, blue, alpha);
         return rv;
     }
-    public long GetDataLong()
+    public long getDataLong()
     {
         long l = 0;
         for (int v = 0; v < 8; v++)
         {
-            l |= ((long)Buffer[v] & 0xFF) << (8 * (7 - v));
+            l |= ((long)buffer[v] & 0xFF) << (8 * (7 - v));
         }
         return l;
     }
-    //public ulong GetDataULong()
+    //public ulong getDataULong()
     //{
-    //    return (ulong)GetDataLong();
+    //    return (ulong)getDataLong();
     //}
-    public double GetDataDouble()
+    public double getDataDouble()
     {
-        return Double.longBitsToDouble(GetDataLong());
+        return Double.longBitsToDouble(getDataLong());
     }    
-    public LocalDateTime GetDataDateTime()
+    public LocalDateTime getDataDateTime()
     {
-        Instant in = Instant.ofEpochSecond(GetDataLong());
+        Instant in = Instant.ofEpochSecond(getDataLong());
         return LocalDateTime.ofInstant(in, ZoneOffset.UTC);
     }    
-    public String GetDataString()
+    public String getDataString()
     {
         char buf[] = new char[BUFFER_SIZE];
         int c;
         for (c=0; c<BUFFER_SIZE; c++)
         {
-            if (Buffer[c]==CHAR_NULL) break;
-            buf[c] = Buffer[c];
+            if (buffer[c]==CHAR_NULL) break;
+            buf[c] = buffer[c];
         }
         return String.valueOf(buf).substring(0, c);
     }
     //  終了通知を受信したか返却する
-    public boolean IsQuitReceived()
+    public boolean isQuitReceived()
     {
-        return (Buffer[1] == 1);
+        return (buffer[1] == 1);
     }    
-    public boolean IsEmpty()
+    public boolean isEmpty()
     {
         for (int c=0; c<BUFFER_SIZE-1; c++)
         {
-            if (Buffer[c]!=CHAR_NULL) return false;
+            if (buffer[c]!=CHAR_NULL) return false;
         }
-        if (Buffer[BUFFER_SIZE-1]!=CHAR_INITIALIZED) return false;
+        if (buffer[BUFFER_SIZE-1]!=CHAR_INITIALIZED) return false;
         return true;
     }
-    public void CopyDataGramTo(DataGram to)
+    public void copyDataGramTo(DataGram to)
     {
-        System.arraycopy(Buffer, 0, to.Buffer, 0, BUFFER_SIZE);
-        return;
+        System.arraycopy(buffer, 0, to.buffer, 0, BUFFER_SIZE);
     }
 };
